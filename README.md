@@ -77,34 +77,7 @@ A beginner-friendly yet rigorous implementation of a **Variational Autoencoder (
 
 ---
 
-## Project Structure
 
-```
-/third_party/
-  eigen/                # Eigen headers (linear algebra)
-  stb/stb_image_write.h # PNG writer
-/src/
-  core/
-    Tensor.h            # tensor + grad storage
-    Autograd.h          # tape nodes, backward engine
-    Random.h            # RNG for ε ~ N(0, I)
-  nn/
-    Module.h            # base class + parameters()
-    Linear.h            # Linear layer
-    Activations.h       # Tanh, ReLU, Sigmoid
-    Losses.h            # MSE, BCE-with-logits, KL
-    Optim.h             # Adam
-  data/
-    SyntheticShapes.h   # 16×16 circles/triangles/squares
-  vae/
-    VAE.h               # encoder (μ, logvar) + decoder
-  app/
-    train_vae.cpp       # entry point; trains; exports PNG/CSV/GIF
-/assets/                # exported images / videos
-/logs/                  # CSV for losses, metrics
-```
-
----
 
 ## Build & Run
 
