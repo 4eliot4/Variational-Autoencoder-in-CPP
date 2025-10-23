@@ -8,7 +8,8 @@
       "cppStandard": "c++17",
       "intelliSenseMode": "macos-clang-arm64",
       "includePath": [
-        "${workspaceFolder}"       // <— changed
+        "${workspaceFolder}",
+        "/opt/homebrew/opt/eigen/include/eigen3"       // <— changed
       ],
       "defines": []
     }

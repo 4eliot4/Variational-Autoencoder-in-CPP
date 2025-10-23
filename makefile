@@ -1,10 +1,11 @@
 # ---- toolchain ---------------------------------------------------------------
+EIGEN_DIR := /opt/homebrew/opt/eigen/include/eigen3
 CXX        ?= clang++            # or g++
 PKG_CONFIG ?= pkg-config
 PKGS       := gtkmm-4.0
 
 # ---- flags -------------------------------------------------------------------
-#CPPFLAGS := $(shell $(PKG_CONFIG) --cflags $(PKGS))
+CPPFLAGS := -I$(EIGEN_DIR)
 CXXFLAGS := -std=c++17 -Wall -Wextra -Wpedantic
 LDFLAGS  :=
 #LDLIBS   := $(shell $(PKG_CONFIG) --libs $(PKGS))

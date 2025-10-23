@@ -1,6 +1,8 @@
+#include <Eigen/Dense>
 #include <iostream>
 
 int main() {
-    std::cout << "Hello world\n";
-    return 0;
+    Eigen::Matrix2d A; A << 1,2,3,4;
+    Eigen::Vector2d b(5,6);
+    std::cout << "A*b =\n" << A*b << "\n";
 }
