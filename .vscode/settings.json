@@ -4,7 +4,7 @@
   "editor.suggest.snippetsPreventQuickSuggestions": false,
   "code-runner.runInTerminal": true,
   "code-runner.executorMap": {
-    "cpp": "g++ $fileName -o $fileNameWithoutExt -Wall -m64 -static -libgcc `pkg-config --cflags --libs gtkmm-4.0` -std=c++17 && $dir$fileNameWithoutExt"
+  "cpp": "g++ $fileName -o $fileNameWithoutExt -std=c++17 -Wall -I/opt/homebrew/opt/eigen/include/eigen3 && $dir$fileNameWithoutExt"
   },
   "code-runner.saveFileBeforeRun": true,
   "code-runner.preserveFocus": false,
@@ -95,7 +95,8 @@
     "variant": "cpp",
     "semaphore": "cpp",
     "stop_token": "cpp",
-    "thread": "cpp"
+    "thread": "cpp",
+    "print": "cpp"
   },
   "pdf-preview.default.sidebar": false,
   "editor.rulers": [

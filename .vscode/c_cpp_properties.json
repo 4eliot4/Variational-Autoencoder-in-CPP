@@ -9,7 +9,7 @@
       "intelliSenseMode": "macos-clang-arm64",
       "includePath": [
         "${workspaceFolder}",
-        "/opt/homebrew/opt/eigen/include/eigen3"       // <— changed
+        "/opt/homebrew/opt/eigen/include/eigen3"       
       ],
       "defines": []
     }
