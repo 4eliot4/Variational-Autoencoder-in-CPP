@@ -1,7 +1,9 @@
 #include <Eigen/Dense>
 #include <iostream>
 #include <cstdlib>
+#include <random>
 #include <cmath>
+#include "shapes.h"
 
 static int H_size = 32;
 static int D = 256;
@@ -43,21 +45,36 @@ struct Gradients
 {
     Eigen::MatrixXd Gy, Gw2, Gh, Gz, Gw1;
     Eigen::RowVectorXd Gb2, Gb1;
-    Gradients() : Gy(B, D), Gw2(H_size, D), Gh(B, H_size), Gz(B, H_size), Gw1(D, H_size),Gb2(1, D), Gb1(1, D){};
+    Gradients() : Gy(B, D), Gw2(H_size, D), Gh(B, H_size), Gz(B, H_size), Gw1(D, H_size),Gb2(1, D), Gb1(1, H_size){};
 };
 
 void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXd &X);
 void backPass(Gradients &gradients, const ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXd &X);
+void backProp(Weights &weights, const Gradients &gradients);
 
 
 
 int main()
 {
+    std::mt19937 rng(1337u); // random generator
     Weights weights;
 
-    
+    Eigen::MatrixXf X = make_batch_downsampled(16, rng, ShapeType::Any);
+    bool ok = write_png_grid(
+        X,
+        /*gridCols=*/4,
+        /*gridRows=*/4,
+        "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/main_mixed.png"
+    );
+
+    if (!ok) {
+        std::cerr << "png write failed\n";
+    }
+
     return 0;
 }
+
+
 
 
 /* FORWARD PASS
@@ -86,5 +103,18 @@ void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights&
     gradients.Gh = gradients.Gy * weights.W2.transpose();
     gradients.Gz = gradients.Gh.array() * (1 - forward.H.array() * forward.H.array());
     gradients.Gw1 = X.transpose() * gradients.Gz;
-    gradients.Gb1 = gradients.Gz.rowwise().sum();
+    gradients.Gb1 = gradients.Gz.colwise().sum();
+}
+
+void backProp(Weights& weights,const Gradients& gradients)
+{
+    weights.W1 -= lr * gradients.Gw1;
+    weights.b1 -= lr * gradients.Gb1;
+    weights.W2 -= lr * gradients.Gw2;
+    weights.b2 -= lr * gradients.Gb2;
+}
+
+void training()
+{
+
 }
