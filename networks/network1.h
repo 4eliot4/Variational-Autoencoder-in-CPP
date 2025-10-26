@@ -20,8 +20,7 @@ struct Weights
     Eigen::RowVectorXf b1;
     Eigen::MatrixXf W2;
     Eigen::RowVectorXf b2;
-    Eigen::MatrixXf W3;
-    Eigen::RowVectorXf b3;
+
     Weights();
     void print();
 };
@@ -29,8 +28,6 @@ struct ForwardOutput
 {
     Eigen::MatrixXf Z;
     Eigen::MatrixXf H;
-    Eigen::MatrixXf Z2;
-    Eigen::MatrixXf A2;
     Eigen::MatrixXf Yhat;
     Eigen::MatrixXf sigmoid; // sigmoid of Y
     double loss;

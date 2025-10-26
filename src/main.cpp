@@ -20,15 +20,6 @@ int main()
     Weights weights;
     ForwardOutput forward;
     Gradients gradients;
-    std::cout << "Loss no pass : ";forward.lossPrint();
-    generateOutput(rng, forward, weights, 0);
-    forwardPass(forward, weights, X);
-    backPass(gradients, forward, weights, X);
-    backProp(weights,gradients);
-    // std::cout << "first pass : "; weights.print();
-
-    std::cout << "Loss first pass : ";forward.lossPrint();
-
     for (size_t i = 0; i <= 15000; i++)
     {
         X = make_batch_downsampled(/*Batch size*/B, rng, ShapeType::Any);
@@ -44,8 +35,6 @@ int main()
             generateOutput(rng, forward, weights, i);
         }
     }
-
-    // std::cout << "After 100 iterations :"; weights.print();
     std::cout << "Loss after 100 iterations : ";forward.lossPrint();
     return 0;
 }

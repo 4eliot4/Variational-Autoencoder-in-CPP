@@ -10,10 +10,8 @@ double lr = 0.01f;
 
 Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size)*0.05),
                      b1(Eigen::MatrixXf::Zero(1,H_size)),
-                     W2(Eigen::MatrixXf::Random(H_size,H_size)*0.05),
-                     b2(Eigen::MatrixXf::Zero(1,H_size)),
-                     W3(Eigen::MatrixXf::Random(H_size,D)*0.05),
-                     b3(Eigen::MatrixXf::Zero(1,D))
+                     W2(Eigen::MatrixXf::Random(H_size,D)*0.05),
+                     b2(Eigen::MatrixXf::Zero(1,D))
                      {}
 /**
 * @brief Print first 5X5 matrixes of W1 & W2 and print b1 & b2.
@@ -40,8 +38,6 @@ void Weights::print()
 
 ForwardOutput::ForwardOutput() : Z(B, H_size),
                                  H(B, H_size), 
-                                 Z2(B,H_size),
-                                 A2(B,H_size),
                                  Yhat(B, D),
                                  sigmoid(B,D) 
                                  {}
@@ -71,10 +67,8 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
     forward.Z = X * weights.W1;
     forward.Z.rowwise() += weights.b1;
     forward.H = forward.Z.array().tanh(); // element wise
-    forward.Z2 = forward.H * weights.W2;
-    forward.A2 = forward.Z2.array().tanh();
-    forward.Yhat = forward.A2 * weights.W3;
-    forward.Yhat.rowwise() += weights.b3;
+    forward.Yhat = forward.H * weights.W2;
+    forward.Yhat.rowwise() += weights.b2;
 
     forward.sigmoid = 1.0 / (1.0 + (-forward.Yhat.array()).exp()); // sigmoid element wise
     Eigen::MatrixXf loss_per_entry = -(X.array() * forward.sigmoid.array().log() // every element compute -xlog(...)
