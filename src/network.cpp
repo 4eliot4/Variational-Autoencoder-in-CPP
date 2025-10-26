@@ -1,5 +1,6 @@
 #include "network.h"
 #include <cmath>
+#include <stdexcept>
 
 // ====== SETTINGS ======
 int H_size = 32;
@@ -7,17 +8,32 @@ int D = 256;
 int B = 32;
 double lr = 0.01f;
 
-Weights::Weights() : W1(Eigen::MatrixXd::Random(D,H_size)*0.05),
-                     b1(Eigen::MatrixXd::Zero(1,H_size)),
-                     W2(Eigen::MatrixXd::Random(H_size,D)*0.05),
-                     b2(Eigen::MatrixXd::Zero(1,D))
+Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size)*0.05),
+                     b1(Eigen::MatrixXf::Zero(1,H_size)),
+                     W2(Eigen::MatrixXf::Random(H_size,D)*0.05),
+                     b2(Eigen::MatrixXf::Zero(1,D))
                      {}
+/**
+* @brief Print first 5X5 matrixes of W1 & W2 and print b1 & b2.
+* @brief Throw exeption if too small
+*/
 void Weights::print()
 {
-    std::cout << "W1 : " << W1 << std::endl;
-    std::cout << "b1 : " << b1 << std::endl;
-    std::cout << "W2 : " << W2 << std::endl;
-    std::cout << "b2 : " << b2 << std::endl;
+    try {
+        if (W1.rows() < 5 || W1.cols() < 5 ||
+            W2.rows() < 5 || W2.cols() < 5) {
+            throw std::runtime_error("Matrix too small to print 5x5 block.");
+        }
+
+        // If no exception, print submatrices
+        std::cout << "small W1 :\n" << W1.block(0, 0, 5, 5) << std::endl;
+        std::cout << "small b1 :\n" << b1 << std::endl;
+        std::cout << "small W2 :\n" << W2.block(0, 0, 5, 5) << std::endl;
+        std::cout << "small b2 :\n" << b2 << std::endl;
+    }
+    catch (const std::runtime_error& e) {
+        std::cerr << "Caught an exception: " << e.what() << std::endl;
+    }
 }
 
 ForwardOutput::ForwardOutput() : Z(B, H_size),
@@ -25,6 +41,10 @@ ForwardOutput::ForwardOutput() : Z(B, H_size),
                                  Yhat(B, D),
                                  sigmoid(B,D) 
                                  {}
+void ForwardOutput::lossPrint()
+{
+    std::cout << "The loss is : " << this->loss << std::endl;
+}
 
 Gradients::Gradients() : Gy(B, D), 
                          Gw2(H_size, D), 
@@ -42,7 +62,7 @@ Gradients::Gradients() : Gy(B, D),
  * @param weights const : Current model weights and biases.
  * @param X const : Input batch matrix of shape (B, D).
  */
-void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::MatrixXd& X)
+void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::MatrixXf& X)
 {
     forward.Z = X * weights.W1;
     forward.Z.rowwise() += weights.b1;
@@ -51,7 +71,7 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
     forward.Yhat.rowwise() += weights.b2;
 
     forward.sigmoid = 1.0 / (1.0 + (-forward.Yhat.array()).exp()); // sigmoid element wise
-    Eigen::MatrixXd loss_per_entry = -(X.array() * forward.sigmoid.array().log() // every element compute -xlog(...)
+    Eigen::MatrixXf loss_per_entry = -(X.array() * forward.sigmoid.array().log() // every element compute -xlog(...)
                                      + (1 - X.array()) * (1 - forward.sigmoid.array()).log());
 
     forward.loss = loss_per_entry.mean(); // mean over all entries in batch, mean over B & D !
@@ -64,7 +84,7 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
  * @param weights  const : Current model weights.
  * @param X const : Input batch.
  */
-void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights& weights,const Eigen::MatrixXd& X)
+void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights& weights,const Eigen::MatrixXf& X)
 {
     gradients.Gy = (forward.sigmoid - X) / (B * D);
     gradients.Gw2 = forward.H.transpose() * gradients.Gy;

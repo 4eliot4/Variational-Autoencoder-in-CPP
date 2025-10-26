@@ -15,34 +15,35 @@ extern double lr;
 
 struct Weights
 {
-    // Eigen::MatrixXd W1(256,H); wrong: its not gonna call the constructor
-    Eigen::MatrixXd W1;
-    Eigen::RowVectorXd b1;
-    Eigen::MatrixXd W2;
-    Eigen::RowVectorXd b2;
+    // Eigen::MatrixXf W1(256,H); wrong: its not gonna call the constructor
+    Eigen::MatrixXf W1;
+    Eigen::RowVectorXf b1;
+    Eigen::MatrixXf W2;
+    Eigen::RowVectorXf b2;
 
     Weights();
     void print();
 };
 struct ForwardOutput
 {
-    Eigen::MatrixXd Z;
-    Eigen::MatrixXd H;
-    Eigen::MatrixXd Yhat;
-    Eigen::MatrixXd sigmoid; // sigmoid of Y
+    Eigen::MatrixXf Z;
+    Eigen::MatrixXf H;
+    Eigen::MatrixXf Yhat;
+    Eigen::MatrixXf sigmoid; // sigmoid of Y
     double loss;
     ForwardOutput();
+    void lossPrint();
 };
 
 struct Gradients
 {
-    Eigen::MatrixXd Gy, Gw2, Gh, Gz, Gw1;
-    Eigen::RowVectorXd Gb2, Gb1;
+    Eigen::MatrixXf Gy, Gw2, Gh, Gz, Gw1;
+    Eigen::RowVectorXf Gb2, Gb1;
     Gradients();
 };
 
-void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXd &X);
-void backPass(Gradients &gradients, const ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXd &X);
+void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X);
+void backPass(Gradients &gradients, const ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X);
 void backProp(Weights &weights, const Gradients &gradients);
 
 
