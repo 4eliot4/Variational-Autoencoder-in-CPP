@@ -40,8 +40,8 @@ struct ForwardOutput
 
 struct Gradients
 {
-    Eigen::MatrixXf Gy, Gw2, Gh, Gz, Gw1;
-    Eigen::RowVectorXf Gb2, Gb1;
+    Eigen::MatrixXf Gy, Gw3,Ga2,Gz2,Gw2, Gh, Gz, Gw1;
+    Eigen::RowVectorXf Gb3,Gb2, Gb1;
     Gradients();
 };
 

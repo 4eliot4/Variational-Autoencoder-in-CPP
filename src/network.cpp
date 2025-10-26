@@ -51,11 +51,15 @@ void ForwardOutput::lossPrint()
 }
 
 Gradients::Gradients() : Gy(B, D), 
-                         Gw2(H_size, D), 
+                         Gw3(H_size,D),
+                         Ga2(B,H_size),
+                         Gz2(B,H_size),
+                         Gw2(H_size, H_size), 
                          Gh(B, H_size), 
                          Gz(B, H_size), 
                          Gw1(D, H_size),
-                         Gb2(1, D), 
+                         Gb3(1,D),
+                         Gb2(1, H_size), 
                          Gb1(1, H_size)
                          {}
 
@@ -93,9 +97,13 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
 void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights& weights,const Eigen::MatrixXf& X)
 {
     gradients.Gy = (forward.sigmoid - X) / (B * D);
-    gradients.Gw2 = forward.H.transpose() * gradients.Gy;
-    gradients.Gb2 = gradients.Gy.colwise().sum();
-    gradients.Gh = gradients.Gy * weights.W2.transpose();
+    gradients.Gw3 = forward.A2.transpose() * gradients.Gy;
+    gradients.Gb3 = gradients.Gy.colwise().sum();
+    gradients.Ga2 = gradients.Gy * weights.W3.transpose();
+    gradients.Gz2 = gradients.Ga2.array() * (1 - forward.A2.array() * forward.A2.array());
+    gradients.Gw2 = forward.H.transpose() * gradients.Gz2;
+    gradients.Gb2 = gradients.Gz2.colwise().sum();
+    gradients.Gh = gradients.Gz2 * weights.W2.transpose();
     gradients.Gz = gradients.Gh.array() * (1 - forward.H.array() * forward.H.array());
     gradients.Gw1 = X.transpose() * gradients.Gz;
     gradients.Gb1 = gradients.Gz.colwise().sum();
@@ -112,6 +120,8 @@ void backProp(Weights& weights,const Gradients& gradients)
     weights.b1 -= lr * gradients.Gb1;
     weights.W2 -= lr * gradients.Gw2;
     weights.b2 -= lr * gradients.Gb2;
+    weights.W3 -= lr * gradients.Gw3;
+    weights.b3 -= lr * gradients.Gb3;
 }
 
 void training()
