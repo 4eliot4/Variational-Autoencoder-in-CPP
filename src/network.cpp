@@ -76,6 +76,7 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
     forward.Z.rowwise() += weights.b1;
     forward.H = forward.Z.array().tanh(); // element wise
     forward.Z2 = forward.H * weights.W2;
+    forward.Z2.rowwise() += weights.b2;
     forward.A2 = forward.Z2.array().tanh();
     forward.Yhat = forward.A2 * weights.W3;
     forward.Yhat.rowwise() += weights.b3;
