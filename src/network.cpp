@@ -3,9 +3,9 @@
 #include <stdexcept>
 
 // ====== SETTINGS ======
-int H_size = 32;
+int H_size = 128;
 int D = 256;
-int B = 32;
+int B = 50;
 double lr = 0.01f;
 
 Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size)*0.05),
