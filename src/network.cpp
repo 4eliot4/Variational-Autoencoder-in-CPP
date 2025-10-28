@@ -3,7 +3,7 @@
 #include <stdexcept>
 
 // ====== SETTINGS ======
-int H_size = 128;
+int H_size = 64;
 int D = 256;
 int B = 50;
 double lr = 0.01f;
