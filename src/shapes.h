@@ -40,3 +40,5 @@ bool write_png_grid(const Eigen::MatrixXf& batch,
 // Compute quick stats about a batch (mean brightness, approx "area")
 // returns struct BatchStats { mean_pixel, ones_total }
 BatchStats compute_stats(const Eigen::MatrixXf& X);
+
+Eigen::RowVectorXf compute_dataset_mean(int N, std::mt19937& rng, ShapeType force = ShapeType::Any);

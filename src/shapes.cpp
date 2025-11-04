@@ -64,22 +64,38 @@ static ShapeParams sample_params(std::mt19937& rng,
         p.type = force;
     }
 
-    // Center around roughly (8,8) with mild variation in [5,11]
-    std::uniform_real_distribution<float> Uc(5.f, 11.f);
-    p.cx = Uc(rng);
-    p.cy = Uc(rng);
+    
 
     if (p.type == ShapeType::Circle) {
         std::uniform_real_distribution<float> Ur(3.0f, 5.0f);
         p.radius = Ur(rng);
+
+        std::uniform_real_distribution<float> Ucx(-p.radius, 16.0f + p.radius);
+        std::uniform_real_distribution<float> Ucy(-p.radius, 16.0f + p.radius);
+        p.cx = Ucx(rng);
+        p.cy = Ucy(rng);
+
     } else if (p.type == ShapeType::Square) {
         std::uniform_real_distribution<float> Us(6.0f, 10.0f);
         p.side = Us(rng);
+        float half = 0.5f * p.side;
+        std::uniform_real_distribution<float> Ucx(-half, 16.0f + half);
+        std::uniform_real_distribution<float> Ucy(-half, 16.0f + half);
+        p.cx = Ucx(rng);
+        p.cy = Ucy(rng);
+
     } else if (p.type == ShapeType::Triangle) {
         std::uniform_real_distribution<float> Ubw(6.0f, 10.0f);
         std::uniform_real_distribution<float> Uh(6.0f, 10.0f);
         p.tri_bw = Ubw(rng);
         p.tri_h  = Uh(rng);
+
+        float halfW = 0.5f * p.tri_bw;
+        float halfH = 0.5f * p.tri_h;
+        std::uniform_real_distribution<float> Ucx(-halfW, 16.0f + halfW);
+        std::uniform_real_distribution<float> Ucy(-halfH, 16.0f + halfH);
+        p.cx = Ucx(rng);
+        p.cy = Ucy(rng);
     }
     return p;
 }
@@ -313,4 +329,19 @@ BatchStats compute_stats(const MatrixXf& X)
     s.mean_pixel = sum / float(B * D);
     s.ones_total = ones;
     return s;
+}
+
+Eigen::RowVectorXf compute_dataset_mean(int N, std::mt19937& rng, ShapeType force)
+{
+    Eigen::RowVectorXf mean = Eigen::RowVectorXf::Zero(16*16);
+    const int chunk = 500; // accumulate in chunks to avoid huge mem
+    int remaining = N;
+    while (remaining > 0) {
+        int b = std::min(chunk, remaining);
+        Eigen::MatrixXf X = make_batch_downsampled(b, rng, force);
+        mean += X.colwise().mean();   // add batch mean
+        remaining -= b;
+    }
+    mean /= float( (N + chunk - 1) / chunk ); // average of batch-means
+    return mean;
 }
