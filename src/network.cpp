@@ -3,16 +3,17 @@
 #include <stdexcept>
 
 // ====== SETTINGS ======
-int H_size = 64;
-int D = 256;
-int B = 50;
+int H_size = 128;
+int D = 784;
+int B = 64;
 double lr = 0.01f;
+auto xavier = [](int fan_in, int fan_out){ return std::sqrt(2.0f / float(fan_in + fan_out)); };
 
-Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size)*0.05),
+Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size) * xavier(D, H_size)),
                      b1(Eigen::MatrixXf::Zero(1,H_size)),
-                     W2(Eigen::MatrixXf::Random(H_size,H_size)*0.05),
+                     W2(Eigen::MatrixXf::Random(H_size,H_size) * xavier(H_size, H_size)),
                      b2(Eigen::MatrixXf::Zero(1,H_size)),
-                     W3(Eigen::MatrixXf::Random(H_size,D)*0.05),
+                     W3(Eigen::MatrixXf::Random(H_size,D) * xavier(H_size, D)),
                      b3(Eigen::MatrixXf::Zero(1,D))
                      {}
 /**

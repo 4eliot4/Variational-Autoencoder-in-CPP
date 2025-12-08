@@ -2,7 +2,7 @@
 EIGEN_DIR := /opt/homebrew/opt/eigen/include/eigen3
 CXX        ?= clang++            # or g++
 PKG_CONFIG ?= pkg-config
-PKGS       := gtkmm-4.0
+PKGS       := 
 
 # ---- flags -------------------------------------------------------------------
 CPPFLAGS := -I$(EIGEN_DIR)

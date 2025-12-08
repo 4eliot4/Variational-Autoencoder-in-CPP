@@ -6,23 +6,24 @@
 #include <sstream>
 #include <iomanip>
 
-#include "shapes.h"
+#include "shape.h"
 #include "network.h"
 
 void generateOutput(std::__1::mt19937 &rng, ForwardOutput &forward, const Weights &weights, int iteration);
+size_t iterations = 50000;
 
 int main()
 {
     std::mt19937 rng(1337u); // random generator
     
 
-    Eigen::MatrixXf X = make_batch_downsampled(/*Batch size*/B, rng, ShapeType::Any);
+    Eigen::MatrixXf X = make_batch_mnist(B, rng, true);
     Weights weights;
     ForwardOutput forward;
     Gradients gradients;
-    for (size_t i = 0; i <= 15000; i++)
+    for (size_t i = 0; i <= iterations; i++)
     {
-        X = make_batch_downsampled(/*Batch size*/B, rng, ShapeType::Any);
+        X = make_batch_mnist(B, rng, true);
         forwardPass(forward, weights, X);
         backPass(gradients, forward, weights, X);
         backProp(weights,gradients);
@@ -34,6 +35,7 @@ int main()
         {
             generateOutput(rng, forward, weights, i);
         }
+        
     }
     std::cout << "Loss after 100 iterations : ";forward.lossPrint();
     return 0;
@@ -42,23 +44,20 @@ int main()
 
 void generateOutput(std::mt19937 &rng, ForwardOutput& forward, const Weights& weights, int iteration)
 {
-    // === Génération d'une image de sortie après 100 itérations ===
-    Eigen::MatrixXf X_test = make_batch_downsampled(/*Batch size*/B, rng, ShapeType::Any);
+    // Load an image
+    Eigen::MatrixXf X_test = make_batch_mnist(B, rng, true);
     std::ostringstream inputPath;
-    inputPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"
-         << "INPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
+    inputPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "INPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
 
-    // Passage forward final
     forwardPass(forward, weights, X_test);
 
-    // Sauvegarde de la reconstruction
+    // Save
     std::ostringstream path;
-    path << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"
-         << "OUTPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
+    path << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "OUTPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
 
     // Sauvegarde de la reconstruction
-    bool input = write_png_grid(X_test, 4, 4, inputPath.str()) ;
-    bool ok = write_png_grid(forward.sigmoid, 4, 4, path.str());
+    bool input = write_png_grid_mnist(X_test, 4, 4, inputPath.str()) ;
+    bool ok = write_png_grid_mnist(forward.sigmoid, 4, 4, path.str());
 
     if (!input) {
         std::cerr << " Failed to write " << inputPath.str() << "\n";
