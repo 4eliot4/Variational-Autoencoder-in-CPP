@@ -9,13 +9,13 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (needed for 3D)
 BASE_DIR = Path("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets")
 
 # First iteration to plot
-START_ITER = 35000          # e.g. 0 or 500 or 2500
+START_ITER = 5000          # e.g. 0 or 500 or 2500
 
 # Step between iterations (this is your "modulo", e.g. 500, 1000, 2500)
 STEP = 5000             # change to 500, 1000, ... as you like
 
 # How many different iterations to show
-NUM_SNAPSHOTS = 1       # e.g. 6 snapshots: 0, 2500, 5000, 7500, 10000, 12500
+NUM_SNAPSHOTS = 8       # e.g. 6 snapshots: 0, 2500, 5000, 7500, 10000, 12500
 
 # Latent dims to plot:
 #   - (0, 1)  -> 2D plot of h1 vs h2

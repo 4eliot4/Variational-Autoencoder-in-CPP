@@ -24,8 +24,10 @@ int main()
     Gradients gradients;
     for (size_t i = 0; i <= iterations; i++)
     {
-        X = make_batch_mnist(B, rng, true);
-        //X = make_single_image_batch(1234, B); // overfit test
+        // X = make_batch_mnist(B, rng, true);
+        // X = make_single_image_batch(1234, B); // overfit test
+        X = make_two_images_batch(1234, 1235, B);
+
         forwardPass(forward, weights, X);
         backPass(gradients, forward, weights, X);
         backProp(weights,gradients);
@@ -51,8 +53,10 @@ int main()
 void generateOutput(std::mt19937 &rng, ForwardOutput& forward, const Weights& weights, int iteration)
 {
     // Load an image
-    Eigen::MatrixXf X_test = make_batch_mnist(B, rng, true);
-    // Eigen::MatrixXf X_test = make_single_image_batch(1234, B);
+    //Eigen::MatrixXf X_test = make_batch_mnist(B, rng, true);
+    //Eigen::MatrixXf X_test = make_single_image_batch(1234, B);
+    Eigen::MatrixXf X_test = make_two_images_batch(1234, 1235, B);
+
     std::ostringstream inputPath;
     inputPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "INPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
 

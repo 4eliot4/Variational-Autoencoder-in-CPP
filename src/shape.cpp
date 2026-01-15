@@ -158,7 +158,7 @@ Eigen::MatrixXf make_single_image_batch(int index, int batch_size)
     load_mnist();
 
     const Eigen::MatrixXf& Xsrc = g_train_images;  // this is your "mnist_train"
-    assert(index >= 0 && index < Xsrc.rows());
+    assert(index >= 0 && index < Xsrc.rows()); // only in debug version of make
 
     Eigen::MatrixXf X(batch_size, Xsrc.cols());
     Eigen::RowVectorXf img = Xsrc.row(index);
@@ -166,5 +166,25 @@ Eigen::MatrixXf make_single_image_batch(int index, int batch_size)
     for (int i = 0; i < batch_size; ++i) {
         X.row(i) = img;   // repeat the SAME image
     }
+    return X;
+}
+
+// ------------------------------------------------------------
+// Make a batch for two digits overfit test
+// ------------------------------------------------------------
+Eigen::MatrixXf make_two_images_batch(int index1, int index2,int batch_size)
+{
+    load_mnist();
+
+    const Eigen::MatrixXf& Xsrc = g_train_images;
+    assert(index1 >= 0 && index1 < Xsrc.rows()); // only in debug version of make
+    assert(index2 >= 0 && index2 < Xsrc.rows()); // only in debug version of make
+
+    Eigen::MatrixXf X(batch_size, Xsrc.cols());
+    Eigen::RowVectorXf img1 = Xsrc.row(index1);
+    Eigen::RowVectorXf img2 = Xsrc.row(index2);
+
+    for (int i = 0; i < batch_size; ++i) 
+        (i % 2 == 0) ? X.row(i) = img1 : X.row(i) = img2;
     return X;
 }

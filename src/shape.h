@@ -12,3 +12,5 @@ bool write_png_grid_mnist(const Eigen::MatrixXf &batch,
 
 Eigen::MatrixXf make_single_image_batch(int index,
                                         int batch_size);
+
+Eigen::MatrixXf make_two_images_batch(int index1, int index2, int batch_size);

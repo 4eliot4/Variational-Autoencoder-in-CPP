@@ -7,7 +7,7 @@
 int H_size = 32;
 int D = 784;
 int B = 64;
-double lr = 0.001f;
+double lr = 0.01f;
 auto xavier = [](int fan_in, int fan_out){ return std::sqrt(2.0f / float(fan_in + fan_out)); };
 
 Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size) * xavier(D, H_size)),

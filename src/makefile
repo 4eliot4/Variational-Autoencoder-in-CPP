@@ -18,7 +18,8 @@ ifeq ($(BUILD),debug)
   CXXFLAGS += -fsanitize=$(SANITIZERS) -fno-omit-frame-pointer
   LDFLAGS  += -fsanitize=$(SANITIZERS)
 else ifeq ($(BUILD),release)
-  CXXFLAGS += -O3 -DNDEBUG
+  CXXFLAGS += -O3 -DNDEBUG -march=native
+  CPPFLAGS += -DEIGEN_NO_DEBUG
 endif
 
 # ---- layout ------------------------------------------------------------------
