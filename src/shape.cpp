@@ -148,3 +148,23 @@ bool write_png_grid_mnist(const Eigen::MatrixXf &batch,
     int ok = stbi_write_png(outPath.c_str(), outW, outH, 1, img.data(), outW);
     return ok != 0;
 }
+
+// ------------------------------------------------------------
+// Make a batch for one digit overfit test
+// ------------------------------------------------------------
+Eigen::MatrixXf make_single_image_batch(int index, int batch_size)
+{
+    // Make sure MNIST is loaded
+    load_mnist();
+
+    const Eigen::MatrixXf& Xsrc = g_train_images;  // this is your "mnist_train"
+    assert(index >= 0 && index < Xsrc.rows());
+
+    Eigen::MatrixXf X(batch_size, Xsrc.cols());
+    Eigen::RowVectorXf img = Xsrc.row(index);
+
+    for (int i = 0; i < batch_size; ++i) {
+        X.row(i) = img;   // repeat the SAME image
+    }
+    return X;
+}

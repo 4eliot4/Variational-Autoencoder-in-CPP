@@ -49,5 +49,6 @@ void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::Ma
 void backPass(Gradients &gradients, const ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X);
 void backProp(Weights &weights, const Gradients &gradients);
 
+void save_matrix_csv(const Eigen::MatrixXf &M, const std::string &path);
 
 #endif // NETWORK_H

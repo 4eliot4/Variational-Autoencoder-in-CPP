@@ -9,3 +9,6 @@ bool write_png_grid_mnist(const Eigen::MatrixXf &batch,
                           int gridCols,
                           int gridRows,
                           const std::string &outPath);
+
+Eigen::MatrixXf make_single_image_batch(int index,
+                                        int batch_size);

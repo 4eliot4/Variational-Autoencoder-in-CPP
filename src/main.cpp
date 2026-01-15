@@ -10,7 +10,8 @@
 #include "network.h"
 
 void generateOutput(std::__1::mt19937 &rng, ForwardOutput &forward, const Weights &weights, int iteration);
-size_t iterations = 50000;
+size_t iterations = 500000;
+
 
 int main()
 {
@@ -24,6 +25,7 @@ int main()
     for (size_t i = 0; i <= iterations; i++)
     {
         X = make_batch_mnist(B, rng, true);
+        //X = make_single_image_batch(1234, B); // overfit test
         forwardPass(forward, weights, X);
         backPass(gradients, forward, weights, X);
         backProp(weights,gradients);
@@ -34,8 +36,12 @@ int main()
         if(i % 500 == 0)
         {
             generateOutput(rng, forward, weights, i);
+
+            std::ostringstream hPath;
+            hPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"
+                  << "H_latent_iter_" << std::setw(5) << std::setfill('0') << i << ".csv";
+            save_matrix_csv(forward.H,hPath.str());
         }
-        
     }
     std::cout << "Loss after 100 iterations : ";forward.lossPrint();
     return 0;
@@ -46,6 +52,7 @@ void generateOutput(std::mt19937 &rng, ForwardOutput& forward, const Weights& we
 {
     // Load an image
     Eigen::MatrixXf X_test = make_batch_mnist(B, rng, true);
+    // Eigen::MatrixXf X_test = make_single_image_batch(1234, B);
     std::ostringstream inputPath;
     inputPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "INPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
 

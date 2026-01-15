@@ -1,12 +1,13 @@
 #include "network.h"
 #include <cmath>
 #include <stdexcept>
+#include <fstream>
 
 // ====== SETTINGS ======
-int H_size = 128;
+int H_size = 32;
 int D = 784;
 int B = 64;
-double lr = 0.01f;
+double lr = 0.001f;
 auto xavier = [](int fan_in, int fan_out){ return std::sqrt(2.0f / float(fan_in + fan_out)); };
 
 Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size) * xavier(D, H_size)),
@@ -87,6 +88,7 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
                                      + (1 - X.array()) * (1 - forward.sigmoid.array()).log());
 
     forward.loss = loss_per_entry.mean(); // mean over all entries in batch, mean over B & D !
+
 }
 
 /**
@@ -129,4 +131,27 @@ void backProp(Weights& weights,const Gradients& gradients)
 void training()
 {
 
+}
+
+
+// Save a matrix as CSV: one row per line, comma-separated
+void save_matrix_csv(const Eigen::MatrixXf& M, const std::string& path)
+{
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "ERROR: cannot open file for writing: " << path << "\n";
+        return;
+    }
+
+    const int rows = M.rows();
+    const int cols = M.cols();
+
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            out << M(i, j);
+            if (j + 1 < cols) out << ",";  // comma between columns
+        }
+        out << "\n";
+    }
+    out.close();
 }
