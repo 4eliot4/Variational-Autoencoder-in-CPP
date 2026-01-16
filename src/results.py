@@ -1,100 +1,87 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (needed for 3D)
 
-# ======= USER PARAMETERS =======
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-# Folder where your CSVs are saved
 BASE_DIR = Path("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets")
 
-# First iteration to plot
-START_ITER = 5000          # e.g. 0 or 500 or 2500
+# Pick ONE snapshot iteration to plot (no iteration differentiation)
+ITER_TO_PLOT = 0  # will look for ..._01000.csv
 
-# Step between iterations (this is your "modulo", e.g. 500, 1000, 2500)
-STEP = 5000             # change to 500, 1000, ... as you like
+USE_PCA_3D = True
 
-# How many different iterations to show
-NUM_SNAPSHOTS = 8       # e.g. 6 snapshots: 0, 2500, 5000, 7500, 10000, 12500
+def pca_3d(H):
+    # Center
+    Hc = H - H.mean(axis=0, keepdims=True)
+    # Covariance
+    C = (Hc.T @ Hc) / max(1, (Hc.shape[0] - 1))
+    # Eigen decomposition (symmetric)
+    vals, vecs = np.linalg.eigh(C)
+    # Take top 3 eigenvectors
+    order = np.argsort(vals)[::-1]
+    W = vecs[:, order[:3]]       # (latent_dim, 3)
+    Z = Hc @ W                   # (n, 3)
+    return Z
 
-# Latent dims to plot:
-#   - (0, 1)  -> 2D plot of h1 vs h2
-#   - (0, 1, 2) -> 3D plot of h1 vs h2 vs h3
-DIMS = (0, 1, 2)
-
-# Optional: limit max points per snapshot to avoid huge scatter
-MAX_POINTS_PER_SNAPSHOT = 300
-
-# ================================
-
-
-def load_latent_csv(iteration):
-    """Load H_latent_iter_XXXXX.csv for a given iteration."""
-    fname = BASE_DIR / f"H_latent_iter_{iteration:05d}.csv"
+def load_latent_digit(digit, iteration):
+    fname = BASE_DIR / f"nb_{digit}" / f"H_latent_iter_{digit}_{iteration:05d}.csv"
     if not fname.exists():
-        print(f"[WARN] File not found: {fname}")
+        print(f"[WARN] missing: {fname}")
         return None
     H = np.loadtxt(fname, delimiter=",")
     if H.ndim == 1:
-        # Single row corner case: shape (D,) -> make it (1, D)
         H = H[None, :]
-    print(f"Loaded {fname.name}, shape={H.shape}")
     return H
 
-
 def main():
-    iters = [START_ITER + k * STEP for k in range(NUM_SNAPSHOTS)]
+    H_list = []
+    labels_list = []
 
-    # Choose 2D vs 3D depending on how many dims we asked for
-    if len(DIMS) == 2:
-        fig, ax = plt.subplots()
-    elif len(DIMS) == 3:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
-    else:
-        raise ValueError("DIMS must have length 2 or 3.")
-
-    # Colormap for different iterations
-    cmap = plt.cm.get_cmap("viridis", len(iters))
-
-    for idx, it in enumerate(iters):
-        H = load_latent_csv(it)
+    for d in range(10):
+        H = load_latent_digit(d, ITER_TO_PLOT)
         if H is None:
             continue
+        H_list.append(H)
+        labels_list.append(np.full((H.shape[0],), d, dtype=np.int32))
 
-        # Optionally subsample points
-        if H.shape[0] > MAX_POINTS_PER_SNAPSHOT:
-            H = H[:MAX_POINTS_PER_SNAPSHOT, :]
+    if len(H_list) == 0:
+        raise RuntimeError("No CSV files were loaded. Check ITER_TO_PLOT and paths.")
 
-        if len(DIMS) == 2:
-            x = H[:, DIMS[0]]
-            y = H[:, DIMS[1]]
-            ax.scatter(x, y,
-                       s=5,
-                       alpha=0.7,
-                       color=cmap(idx),
-                       label=f"iter {it}")
-        else:  # 3D
-            x = H[:, DIMS[0]]
-            y = H[:, DIMS[1]]
-            z = H[:, DIMS[2]]
-            ax.scatter(x, y, z,
-                       s=5,
-                       alpha=0.7,
-                       color=cmap(idx),
-                       label=f"iter {it}")
+    H_all = np.vstack(H_list)                 # (N_total, latent_dim)
+    y_all = np.concatenate(labels_list)       # (N_total,)
 
-    # Axes labels
-    ax.set_xlabel(f"h{DIMS[0] + 1}")
-    ax.set_ylabel(f"h{DIMS[1] + 1}")
-    if len(DIMS) == 3:
-        ax.set_zlabel(f"h{DIMS[2] + 1}")
+    # Project to 3D
+    if USE_PCA_3D:
+        P = pca_3d(H_all)                     # (N_total, 3)
+        axis_names = ("PC1", "PC2", "PC3")
+    else:
+        P = H_all[:, :3]
+        axis_names = ("h1", "h2", "h3")
 
-    ax.legend()
-    plt.title("Latent space snapshots at different iterations")
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+
+    cmap = plt.cm.get_cmap("tab10", 10)
+
+    for d in range(10):
+        mask = (y_all == d)
+        if not np.any(mask):
+            continue
+        ax.scatter(
+            P[mask, 0], P[mask, 1], P[mask, 2],
+            s=10, alpha=0.6, color=cmap(d), label=str(d)
+        )
+
+    ax.set_title(f"Latent space (all digits) at iter {ITER_TO_PLOT:05d} - PCA to 3D" if USE_PCA_3D
+                 else f"Latent space (all digits) at iter {ITER_TO_PLOT:05d} - first 3 dims")
+    ax.set_xlabel(axis_names[0])
+    ax.set_ylabel(axis_names[1])
+    ax.set_zlabel(axis_names[2])
+    ax.legend(title="Digit")
+
     plt.tight_layout()
     plt.show()
-
 
 if __name__ == "__main__":
     main()

@@ -1,138 +1,147 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-# -------------------------
-# USER PARAMETERS
-# -------------------------
+# ============================================================
+# USER CONFIG
+# ============================================================
+
 BASE_DIR = Path("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets")
 
-MNIST_DIR = Path("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/MNIST")
-TRAIN_IMAGES = MNIST_DIR / "train-images.idx3-ubyte"
-TRAIN_LABELS = MNIST_DIR / "train-labels.idx1-ubyte"
-
-START_ITER = 5000
-STEP = 5000
-NUM_SNAPSHOTS = 8
-
-# How many samples per digit to show (keep small for readability)
-N_PER_DIGIT = 50
-
-# If True: PCA to 3D. If False: use first 3 latent dims (0,1,2).
+START_ITER = 0
+END_ITER   = 1000
+STEP       = 50          # must match your CSV naming
 USE_PCA_3D = True
 
-# -------------------------
-# IDX HELPERS
-# -------------------------
-def read_u32_be(f):
-    return int.from_bytes(f.read(4), byteorder="big", signed=False)
+# visual tuning
+POINT_SIZE = 6
+ALPHA_BASE = 0.35        # transparency for all points
 
-def load_idx3_images(path):
-    with open(path, "rb") as f:
-        magic = read_u32_be(f)
-        n = read_u32_be(f)
-        rows = read_u32_be(f)
-        cols = read_u32_be(f)
-        assert magic == 2051
-        data = np.frombuffer(f.read(n * rows * cols), dtype=np.uint8)
-    X = data.reshape(n, rows * cols).astype(np.float32) / 255.0
-    return X
+# ============================================================
+# UTILITIES
+# ============================================================
 
-def load_idx1_labels(path):
-    with open(path, "rb") as f:
-        magic = read_u32_be(f)
-        n = read_u32_be(f)
-        assert magic == 2049
-        y = np.frombuffer(f.read(n), dtype=np.uint8)
-    return y
+def shade_color(rgb, factor):
+    """
+    Darken/lighten a base RGB color.
+    factor in [0,1]: 0=white, 1=original color
+    """
+    return tuple(factor * c + (1.0 - factor) for c in rgb)
 
-# -------------------------
-# LATENT LOADER
-# -------------------------
-def load_latent_csv(iteration):
-    fname = BASE_DIR / f"H_latent_iter_{iteration:05d}.csv"
+def pca_fit_3d(H):
+    """Fit PCA(3) on H and return (mean, W)."""
+    mu = H.mean(axis=0, keepdims=True)
+    Hc = H - mu
+    C = (Hc.T @ Hc) / max(1, (Hc.shape[0] - 1))
+    vals, vecs = np.linalg.eigh(C)
+    order = np.argsort(vals)[::-1]
+    W = vecs[:, order[:3]]
+    return mu, W
+
+def pca_project(H, mu, W):
+    return (H - mu) @ W
+
+def load_latent_digit_iter(digit, iteration):
+    """
+    Load CSV:
+      assets/nb_X/H_latent_iter_X_YYYYY.csv
+    """
+    fname = BASE_DIR / f"nb_{digit}" / f"H_latent_iter_{digit}_{iteration:05d}.csv"
     if not fname.exists():
-        print(f"[WARN] missing {fname}")
         return None
     H = np.loadtxt(fname, delimiter=",")
     if H.ndim == 1:
         H = H[None, :]
     return H
 
-# -------------------------
-# PCA to 3D (no sklearn)
-# -------------------------
-def pca_3d(H):
-    # Center
-    Hc = H - H.mean(axis=0, keepdims=True)
-    # Covariance
-    C = (Hc.T @ Hc) / (Hc.shape[0] - 1)
-    # Eigen decomposition (symmetric -> eigh)
-    vals, vecs = np.linalg.eigh(C)
-    # Take top 3 eigenvectors
-    order = np.argsort(vals)[::-1]
-    W = vecs[:, order[:3]]  # (latent_dim, 3)
-    Z = Hc @ W              # (n, 3)
-    return Z
-
-# -------------------------
+# ============================================================
 # MAIN
-# -------------------------
+# ============================================================
+
 def main():
-    # Load MNIST labels (for coloring)
-    X = load_idx3_images(TRAIN_IMAGES)
-    y = load_idx1_labels(TRAIN_LABELS)
+    iters = list(range(START_ITER, END_ITER + 1, STEP))
+    n_iters = len(iters)
 
-    # Pick fixed indices: N_PER_DIGIT per digit, deterministic
-    chosen_idx = []
-    for d in range(10):
-        idx_d = np.where(y == d)[0][:N_PER_DIGIT]
-        chosen_idx.append(idx_d)
-    chosen_idx = np.concatenate(chosen_idx)
-    chosen_labels = y[chosen_idx]
+    H_all = []
+    y_all = []
+    t_all = []
 
-    iters = [START_ITER + k * STEP for k in range(NUM_SNAPSHOTS)]
+    # --------------------------------------------------------
+    # 1) LOAD ALL LATENTS (ALL DIGITS, ALL ITERATIONS)
+    # --------------------------------------------------------
+    missing = 0
+    for k, it in enumerate(iters):
+        for d in range(10):
+            H = load_latent_digit_iter(d, it)
+            if H is None:
+                missing += 1
+                continue
+            H_all.append(H)
+            y_all.append(np.full((H.shape[0],), d))
+            t_all.append(np.full((H.shape[0],), k))
 
-    fig = plt.figure()
+    if len(H_all) == 0:
+        raise RuntimeError("No CSVs loaded — check paths and iteration range")
+
+    if missing > 0:
+        print(f"[INFO] Missing CSV files skipped: {missing}")
+
+    H_all = np.vstack(H_all)
+    y_all = np.concatenate(y_all)
+    t_all = np.concatenate(t_all)
+
+    # --------------------------------------------------------
+    # 2) PROJECT TO 3D (ONE PCA BASIS)
+    # --------------------------------------------------------
+    if USE_PCA_3D:
+        mu, W = pca_fit_3d(H_all)
+        P = pca_project(H_all, mu, W)
+        labels = ("PC1", "PC2", "PC3")
+        title = "Latent space — PCA(3) — color=digit, shade=iteration"
+    else:
+        P = H_all[:, :3]
+        labels = ("h1", "h2", "h3")
+        title = "Latent space — raw latent dims — color=digit, shade=iteration"
+
+    # --------------------------------------------------------
+    # 3) PLOT (ALL ITERATIONS ON SAME AXES)
+    # --------------------------------------------------------
+    fig = plt.figure(figsize=(9, 8))
     ax = fig.add_subplot(111, projection="3d")
 
-    # One color per digit
-    cmap = plt.cm.get_cmap("tab10", 10)
+    base_cmap = plt.cm.get_cmap("tab10", 10)
 
-    for it in iters:
-        H = load_latent_csv(it)
-        if H is None:
-            continue
+    for d in range(10):
+        base_color = base_cmap(d)[:3]
+        mask_d = (y_all == d)
 
-        # IMPORTANT:
-        # This assumes H rows correspond to the SAME chosen_idx order.
-        # So H must have at least len(chosen_idx) rows and match that ordering.
-        if H.shape[0] < len(chosen_idx):
-            print(f"[WARN] iteration {it}: H has {H.shape[0]} rows but need {len(chosen_idx)}")
-            continue
+        for k in range(n_iters):
+            mask = mask_d & (t_all == k)
+            if not np.any(mask):
+                continue
 
-        Hsel = H[:len(chosen_idx), :]  # assumes same ordering as your fixed eval batch
+            # shade encodes training time
+            shade = 0.25 + 0.75 * (k / (n_iters - 1))
+            color = shade_color(base_color, shade)
 
-        if USE_PCA_3D:
-            P = pca_3d(Hsel)
-        else:
-            P = Hsel[:, :3]
+            ax.scatter(
+                P[mask, 0],
+                P[mask, 1],
+                P[mask, 2],
+                s=POINT_SIZE,
+                alpha=ALPHA_BASE,
+                color=color,
+                label=str(d) if k == n_iters - 1 else None
+            )
 
-        # Plot each digit separately (so legend is clean)
-        for d in range(10):
-            mask = (chosen_labels == d)
-            ax.scatter(P[mask, 0], P[mask, 1], P[mask, 2],
-                       s=8, alpha=0.35, color=cmap(d),
-                       label=f"{d}" if it == iters[0] else None)
+    ax.set_title(title)
+    ax.set_xlabel(labels[0])
+    ax.set_ylabel(labels[1])
+    ax.set_zlabel(labels[2])
+    ax.legend(title="Digit")
 
-        ax.set_title(f"Latent space (iter {it})")
-        ax.set_xlabel("z1")
-        ax.set_ylabel("z2")
-        ax.set_zlabel("z3")
-        plt.pause(0.6)  # optional: animate through iterations
-        ax.cla()        # clear for next iter (comment out if you want overlays)
-
-    # If you want one static plot (not animation), remove cla/pause and just overlay.
+    plt.tight_layout()
     plt.show()
 
 if __name__ == "__main__":

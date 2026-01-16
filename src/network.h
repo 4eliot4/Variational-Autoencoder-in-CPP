@@ -69,10 +69,12 @@ struct AdamState
 };
 
 void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X);
+void decoder(ForwardOutput &forward, const Weights &weights);
 void backPass(Gradients &gradients, const ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X);
 void backProp(Weights &weights, const Gradients &gradients);
 void backPropAdam(Weights& weights, const Gradients& gradients, AdamState& opt);
 
 void save_matrix_csv(const Eigen::MatrixXf &M, const std::string &path);
+void save_matrix_images_csv(const Eigen::MatrixXf &M, const std::string &path, const int& a = 1);
 
 #endif // NETWORK_H

@@ -4,7 +4,7 @@
 #include <fstream>
 
 // ====== SETTINGS ======
-int H_size = 32;
+int H_size = 64;
 int D = 784;
 int B = 64;
 double lr = 0.005f;
@@ -126,6 +126,19 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
 }
 
 /**
+ * @brief Compute parameters from H only, used for interpolation for now
+ */
+void decoder(ForwardOutput& forward,const Weights& weights)
+{
+    forward.Z2 = forward.H * weights.W2;
+    forward.Z2.rowwise() += weights.b2.row(0);
+    forward.A2 = forward.Z2.array().cwiseMax(0.0);
+    forward.Yhat = forward.A2 * weights.W3;
+    forward.Yhat.rowwise() += weights.b3.row(0);
+    forward.sigmoid = 1.0 / (1.0 + (-forward.Yhat.array()).exp()); // sigmoid element wise
+}
+
+/**
  * @brief Computes all gradients for backpropagation
  * @param gradients REF : Output struct to store all computed gradients.
  * @param forward const : Forward pass results.
@@ -194,8 +207,34 @@ void save_matrix_csv(const Eigen::MatrixXf& M, const std::string& path)
 
     const int rows = M.rows();
     const int cols = M.cols();
+    for (int i = 0; i < rows; ++i)
+    {
+        for (int j = 0; j < cols; ++j) {
+            out << M(i, j);
+            if (j + 1 < cols) out << ",";  // comma between columns
+        }
+        out << "\n";
+    }
+    out.close();
+}
 
-    for (int i = 0; i < rows; ++i) {
+/** 
+ @brief Save to csv the latent representation of images
+ @param M matrix that is saved, often H
+ @param path path of the csv
+ @param a number of images to save 
+*/
+void save_matrix_images_csv(const Eigen::MatrixXf& M, const std::string& path, const int& a)
+{
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "ERROR: cannot open file for writing: " << path << "\n";
+        return;
+    }
+    const int rows = a;
+    const int cols = M.cols();
+    for (int i = 0; i < rows; ++i)
+    {
         for (int j = 0; j < cols; ++j) {
             out << M(i, j);
             if (j + 1 < cols) out << ",";  // comma between columns
