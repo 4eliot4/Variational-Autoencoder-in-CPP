@@ -22,23 +22,29 @@ int main()
     Weights weights;
     ForwardOutput forward;
     Gradients gradients;
+    AdamState opt;
     for (size_t i = 0; i <= iterations; i++)
     {
-        // X = make_batch_mnist(B, rng, true);
+        X = make_batch_mnist(B, rng, true);
         // X = make_single_image_batch(1234, B); // overfit test
-        X = make_two_images_batch(1234, 1235, B);
-
+        //X = make_two_images_batch(1234, 1235, B);
+        X = (X.array() > 0.5f).cast<float>();
         forwardPass(forward, weights, X);
         backPass(gradients, forward, weights, X);
         backProp(weights,gradients);
+        backPropAdam(weights, gradients, opt);
+        if (i == 0) {
+            std::cout << "X(0) mean=" << X.row(0).mean() << "  X(1) mean=" << X.row(1).mean() << "\n";
+        }
         if ( i % 100 == 0)
         {
             std::cout << "loss after :" << i << "iterations : "; forward.lossPrint();
         }
-        if(i % 500 == 0)
+        if(i % 100 == 0)
         {
             generateOutput(rng, forward, weights, i);
-
+            float d01 = (forward.H.row(0) - forward.H.row(1)).norm();
+            std::cout << "latent distance ||H0-H1|| = " << d01 << "\n";
             std::ostringstream hPath;
             hPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"
                   << "H_latent_iter_" << std::setw(5) << std::setfill('0') << i << ".csv";
@@ -53,15 +59,17 @@ int main()
 void generateOutput(std::mt19937 &rng, ForwardOutput& forward, const Weights& weights, int iteration)
 {
     // Load an image
-    //Eigen::MatrixXf X_test = make_batch_mnist(B, rng, true);
+    Eigen::MatrixXf X_test = make_batch_mnist(B, rng, true);
     //Eigen::MatrixXf X_test = make_single_image_batch(1234, B);
-    Eigen::MatrixXf X_test = make_two_images_batch(1234, 1235, B);
-
+    //Eigen::MatrixXf X_test = make_two_images_batch(1234, 1235, B);
+    X_test = (X_test.array() > 0.5f).cast<float>();
     std::ostringstream inputPath;
     inputPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "INPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
 
     forwardPass(forward, weights, X_test);
-
+    std::cout << "sigmoid: min=" << forward.sigmoid.minCoeff()
+          << " max=" << forward.sigmoid.maxCoeff()
+          << " mean=" << forward.sigmoid.mean() << "\n";
     // Save
     std::ostringstream path;
     path << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "OUTPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
