@@ -11,7 +11,7 @@
 
 void generateOutput(std::__1::mt19937 &rng, ForwardOutput &forward, const Weights &weights, int iteration);
 void interpolation(Eigen::MatrixXf &X1, Eigen::MatrixXf &X2, const Weights &weights, ForwardOutput &forward, const double &t);
-size_t iterations = 1000;
+size_t iterations = 30000;
 
 int main()
 {
@@ -31,14 +31,14 @@ int main()
         X = (X.array() > 0.5f).cast<float>();
         forwardPass(forward, weights, X);
         backPass(gradients, forward, weights, X);
-        backProp(weights,gradients);
+        //backProp(weights,gradients);
         backPropAdam(weights, gradients, opt);
         
         if ( i % 100 == 0)
         {
             std::cout << "loss after :" << i << "iterations : "; forward.lossPrint();
         }
-        if(i % 1000 == 0)
+        if(i % 5000 == 0)
         {
             generateOutput(rng, forward, weights, i);
             std::ostringstream hPath;

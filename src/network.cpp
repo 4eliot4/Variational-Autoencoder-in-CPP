@@ -122,7 +122,6 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
 
     Eigen::MatrixXf loss_per_entry = -(X.array() * s.log() + (1.0f - X.array()) * (1.0f - s).log()).matrix();
     forward.loss = loss_per_entry.mean(); // mean over all entries in batch, mean over B & D !
-
 }
 
 /**
