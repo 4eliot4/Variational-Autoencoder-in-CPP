@@ -22,12 +22,16 @@ struct Weights
     Eigen::MatrixXf b2;
     Eigen::MatrixXf W3;
     Eigen::MatrixXf b3;
+    Eigen::MatrixXf Wmu;
+    Eigen::MatrixXf bmu;
+    Eigen::MatrixXf Wv;
+    Eigen::MatrixXf bv;
     Weights();
     void print();
 };
 struct ForwardOutput
 {
-    Eigen::MatrixXf Z;
+    Eigen::MatrixXf X;
     Eigen::MatrixXf H;
     Eigen::MatrixXf Z2;
     Eigen::MatrixXf A2;
@@ -40,8 +44,8 @@ struct ForwardOutput
 
 struct Gradients
 {
-    Eigen::MatrixXf Gy, Gw3,Ga2,Gz2,Gw2, Gh, Gz, Gw1;
-    Eigen::MatrixXf Gb3,Gb2, Gb1;
+    Eigen::MatrixXf Gy, Gw3,Ga2,Gz2,Gm,Gv,Gw2, Gh, Gz, Gw1;
+    Eigen::MatrixXf Gb3,Gb2,Gbv,Gbmu,Gb1;
     Gradients();
 };
 struct AdamState 
@@ -56,6 +60,12 @@ struct AdamState
     Eigen::MatrixXf mW3, vW3;
     Eigen::MatrixXf mb3, vb3;
 
+    Eigen::MatrixXf mWmu, vWmu;
+    Eigen::MatrixXf mbmu, vbmu;
+
+    Eigen::MatrixXf mWv, vWv;
+    Eigen::MatrixXf mbv, vbv;
+
     int t = 0;
 
     AdamState()
@@ -64,7 +74,11 @@ struct AdamState
         mW2(Eigen::MatrixXf::Zero(H_size, H_size)), vW2(Eigen::MatrixXf::Zero(H_size, H_size)),
         mb2(Eigen::MatrixXf::Zero(1, H_size)), vb2(Eigen::MatrixXf::Zero(1, H_size)),
         mW3(Eigen::MatrixXf::Zero(H_size, D)), vW3(Eigen::MatrixXf::Zero(H_size, D)),
-        mb3(Eigen::MatrixXf::Zero(1, D)), vb3(Eigen::MatrixXf::Zero(1, D))
+        mb3(Eigen::MatrixXf::Zero(1, D)), vb3(Eigen::MatrixXf::Zero(1, D)),
+        mWmu(Eigen::MatrixXf::Zero(H_size, H_size)), vWmu(Eigen::MatrixXf::Zero(H_size, H_size)),
+        mbmu(Eigen::MatrixXf::Zero(1, H_size)), vbmu(Eigen::MatrixXf::Zero(1, H_size)),
+        mWv(Eigen::MatrixXf::Zero(H_size, H_size)), vWv(Eigen::MatrixXf::Zero(H_size, H_size)),
+        mbv(Eigen::MatrixXf::Zero(1, H_size)), vbv(Eigen::MatrixXf::Zero(1, H_size))
     {}
 };
 

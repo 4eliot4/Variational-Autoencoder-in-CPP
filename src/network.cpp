@@ -16,7 +16,11 @@ Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size) * xavier(D, H_size)),
                      W2(Eigen::MatrixXf::Random(H_size,H_size) * xavier(H_size, H_size)),
                      b2(Eigen::MatrixXf::Zero(1,H_size)),
                      W3(Eigen::MatrixXf::Random(H_size,D) * xavier(H_size, D)),
-                     b3(Eigen::MatrixXf::Zero(1,D))
+                     b3(Eigen::MatrixXf::Zero(1,D)),
+                     Wmu(Eigen::MatrixXf::Random(H_size,H_size) * xavier(H_size,H_size)),
+                     bmu(Eigen::MatrixXf::Zero(1,H_size)),
+                     Wv(Eigen::MatrixXf::Random(H_size,H_size) * xavier(H_size,H_size)),
+                     bv(Eigen::MatrixXf::Zero(1,H_size))
                      {}
                      
 
@@ -70,7 +74,7 @@ void Weights::print()
     }
 }
 
-ForwardOutput::ForwardOutput() : Z(B, H_size),
+ForwardOutput::ForwardOutput() : X(B, H_size),
                                  H(B, H_size), 
                                  Z2(B,H_size),
                                  A2(B,H_size),
@@ -86,16 +90,21 @@ Gradients::Gradients() : Gy(B, D),
                          Gw3(H_size,D),
                          Ga2(B,H_size),
                          Gz2(B,H_size),
+                         Gm(H_size,H_size),
+                         Gv(H_size,H_size),
                          Gw2(H_size, H_size), 
                          Gh(B, H_size), 
                          Gz(B, H_size), 
                          Gw1(D, H_size),
                          Gb3(1,D),
                          Gb2(1, H_size), 
+                         Gbv(1,H_size),
+                         Gbmu(1,H_size),
                          Gb1(1, H_size)
                          {}
 
-
+Eigen::MatrixXf Gy, Gw3,Ga2,Gz2,Gm,Gv,Gw2, Gh, Gz, Gw1;
+    Eigen::MatrixXf Gb3,Gb2,Gbv,Gbmu,Gb1;
 /**
  * @brief Performs the forward pass through the network.
  * @param forward REFERENCE : Struct containing intermediate results (Z, H, Yhat, sigmoid, loss).
@@ -104,9 +113,9 @@ Gradients::Gradients() : Gy(B, D),
  */
 void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::MatrixXf& X)
 {
-    forward.Z = X * weights.W1;
-    forward.Z.rowwise() += weights.b1.row(0);
-    forward.H = forward.Z.array().cwiseMax(0.0); // element wise ReLU
+    forward.X = X * weights.W1;
+    forward.X.rowwise() += weights.b1.row(0);
+    forward.H = forward.X.array().cwiseMax(0.0); // element wise ReLU
     forward.Z2 = forward.H * weights.W2;
     forward.Z2.rowwise() += weights.b2.row(0);
     forward.A2 = forward.Z2.array().cwiseMax(0.0);
@@ -158,7 +167,7 @@ void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights&
     gradients.Gb2 = gradients.Gz2.colwise().sum();
     gradients.Gh = gradients.Gz2 * weights.W2.transpose();
     //gradients.Gz = gradients.Gh.array() * (1 - forward.H.array() * forward.H.array()); // for tanh
-    Eigen::MatrixXf relu1_mask = (forward.Z.array() > 0.0f).cast<float>(); // for ReLU
+    Eigen::MatrixXf relu1_mask = (forward.X.array() > 0.0f).cast<float>(); // for ReLU
     gradients.Gz  = gradients.Gh.array() * relu1_mask.array();
     gradients.Gw1 = X.transpose() * gradients.Gz;
     gradients.Gb1 = gradients.Gz.colwise().sum();
@@ -195,6 +204,9 @@ void backPropAdam(Weights& weights, const Gradients& gradients, AdamState& opt)
 
 
 
+
+
+
 // Save a matrix as CSV: one row per line, comma-separated
 void save_matrix_csv(const Eigen::MatrixXf& M, const std::string& path)
 {
@@ -216,6 +228,8 @@ void save_matrix_csv(const Eigen::MatrixXf& M, const std::string& path)
     }
     out.close();
 }
+
+
 
 /** 
  @brief Save to csv the latent representation of images
