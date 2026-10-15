@@ -29,7 +29,24 @@ int main()
         // X = make_single_image_batch(1234, B); // overfit test
         //X = make_two_images_batch(1234, 1235, B);
         X = (X.array() > 0.5f).cast<float>();
-        forwardPass(forward, weights, X);
+        forwardPass(forward, weights, X,rng);
+        if (i % 100 == 0)
+        {
+            std::cout
+                << "M max abs: "
+                << forward.M.cwiseAbs().maxCoeff()
+
+                << " | V min: "
+                << forward.V.minCoeff()
+
+                << " | V max: "
+                << forward.V.maxCoeff()
+
+                << " | Z max abs: "
+                << forward.Z.cwiseAbs().maxCoeff()
+
+                << std::endl;
+        }
         backPass(gradients, forward, weights, X);
         //backProp(weights,gradients);
         backPropAdam(weights, gradients, opt);
@@ -51,7 +68,7 @@ int main()
     Eigen::MatrixXf X1 = make_batch_mnist(B, rng, true);
     Eigen::MatrixXf X2 = make_batch_mnist(B, rng, true);
     double t = 0.5;
-    interpolation(X1, X2, weights, forward, t);
+    //interpolation(X1, X2, weights, forward, t);
     return 0;
 }
 
@@ -60,14 +77,14 @@ void generateOutput(std::mt19937 &rng, ForwardOutput& forward, const Weights& we
 {
     // Load an image
     std::mt19937 rng1(1020u);
-    Eigen::MatrixXf X_test = make_batch_mnist(B, rng, true);
+    Eigen::MatrixXf X_test = make_batch_mnist(B, rng1, true);
     //Eigen::MatrixXf X_test = make_single_image_batch(1234, B);
     //Eigen::MatrixXf X_test = make_two_images_batch(1234, 1235, B);
     X_test = (X_test.array() > 0.5f).cast<float>();
     std::ostringstream inputPath;
     inputPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "INPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
 
-    forwardPass(forward, weights, X_test);
+    forwardPass(forward, weights, X_test,rng);
     // Save
     std::ostringstream path;
     path << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "OUTPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
@@ -87,7 +104,7 @@ void generateOutput(std::mt19937 &rng, ForwardOutput& forward, const Weights& we
         std::cout << "Saved output no." << iteration << "\n";
     }
 }
-
+/*
 void interpolation(Eigen::MatrixXf& X1,Eigen::MatrixXf& X2,const Weights& weights, ForwardOutput& forward, const double& t)
 {
     forwardPass(forward, weights, X1);
@@ -111,3 +128,4 @@ void interpolation(Eigen::MatrixXf& X1,Eigen::MatrixXf& X2,const Weights& weight
     write_png_grid_mnist(X2, 4, 4, inputPath2.str()) ;
     write_png_grid_mnist(forward.sigmoid, 4, 4, outputPath.str());
 }
+*/

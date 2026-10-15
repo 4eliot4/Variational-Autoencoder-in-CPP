@@ -33,18 +33,24 @@ struct ForwardOutput
 {
     Eigen::MatrixXf X;
     Eigen::MatrixXf H;
-    Eigen::MatrixXf Z2;
+    Eigen::MatrixXf M;
+    Eigen::MatrixXf V;
+    Eigen::MatrixXf E;
+    Eigen::MatrixXf Z;
     Eigen::MatrixXf A2;
+    Eigen::MatrixXf H2;
     Eigen::MatrixXf Yhat;
     Eigen::MatrixXf sigmoid; // sigmoid of Y
     double loss;
+    double lossRec;
+    double lossKL;
     ForwardOutput();
     void lossPrint();
 };
 
 struct Gradients
 {
-    Eigen::MatrixXf Gy, Gw3,Ga2,Gz2,Gm,Gv,Gw2, Gh, Gz, Gw1;
+    Eigen::MatrixXf Gy, Gw3,Gh2,Ga2,Gm,Gv,Gwmu,Gwv,Gw2, Gh,Ga1, Gz, Gw1;
     Eigen::MatrixXf Gb3,Gb2,Gbv,Gbmu,Gb1;
     Gradients();
 };
@@ -82,7 +88,7 @@ struct AdamState
     {}
 };
 
-void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X);
+void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X,std::mt19937& rng);
 void decoder(ForwardOutput &forward, const Weights &weights);
 void backPass(Gradients &gradients, const ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X);
 void backProp(Weights &weights, const Gradients &gradients);

@@ -3,11 +3,12 @@
 #include <stdexcept>
 #include <fstream>
 
+
 // ====== SETTINGS ======
 int H_size = 64;
 int D = 784;
 int B = 64;
-double lr = 0.005f;
+double lr = 0.0003f;
 
 auto xavier = [](int fan_in, int fan_out){ return std::sqrt(2.0f / float(fan_in + fan_out)); };
 
@@ -75,25 +76,35 @@ void Weights::print()
 }
 
 ForwardOutput::ForwardOutput() : X(B, H_size),
-                                 H(B, H_size), 
-                                 Z2(B,H_size),
+                                 H(B, H_size),
+                                 M( B,H_size),
+                                 V(B,H_size), 
+                                 E(B,H_size),
+                                 Z(B,H_size),
                                  A2(B,H_size),
+                                 H2(B,H_size),
                                  Yhat(B, D),
                                  sigmoid(B,D) 
                                  {}
 void ForwardOutput::lossPrint()
 {
-    std::cout << "The loss is : " << this->loss << std::endl;
+    std::cout << "Total: " << loss
+              << " | Reconstruction: " << lossRec
+              << " | KL: " << lossKL
+              << std::endl;
 }
 
 Gradients::Gradients() : Gy(B, D), 
                          Gw3(H_size,D),
+                         Gh2(B,H_size),
                          Ga2(B,H_size),
-                         Gz2(B,H_size),
-                         Gm(H_size,H_size),
-                         Gv(H_size,H_size),
+                         Gm(B,H_size),
+                         Gv(B,H_size),
+                         Gwmu(H_size, H_size),   
+                         Gwv(H_size, H_size),    
                          Gw2(H_size, H_size), 
-                         Gh(B, H_size), 
+                         Gh(B, H_size),
+                         Ga1(B,H_size), 
                          Gz(B, H_size), 
                          Gw1(D, H_size),
                          Gb3(1,D),
@@ -103,7 +114,7 @@ Gradients::Gradients() : Gy(B, D),
                          Gb1(1, H_size)
                          {}
 
-Eigen::MatrixXf Gy, Gw3,Ga2,Gz2,Gm,Gv,Gw2, Gh, Gz, Gw1;
+Eigen::MatrixXf Gy, Gw3,Gh2,Ga2,Gm,Gv,Gw2, Gh, Gz, Gw1;
     Eigen::MatrixXf Gb3,Gb2,Gbv,Gbmu,Gb1;
 /**
  * @brief Performs the forward pass through the network.
@@ -111,15 +122,34 @@ Eigen::MatrixXf Gy, Gw3,Ga2,Gz2,Gm,Gv,Gw2, Gh, Gz, Gw1;
  * @param weights const : Current model weights and biases.
  * @param X const : Input batch matrix of shape (B, D).
  */
-void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::MatrixXf& X)
+void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::MatrixXf& X,std::mt19937& rng)
 {
     forward.X = X * weights.W1;
-    forward.X.rowwise() += weights.b1.row(0);
+    forward.X.rowwise() += weights.b1.row(0); // same param b across all images
     forward.H = forward.X.array().cwiseMax(0.0); // element wise ReLU
-    forward.Z2 = forward.H * weights.W2;
-    forward.Z2.rowwise() += weights.b2.row(0);
-    forward.A2 = forward.Z2.array().cwiseMax(0.0);
-    forward.Yhat = forward.A2 * weights.W3;
+    // VAE
+    // Mean: M = H * Wmu + bmu
+    forward.M = forward.H * weights.Wmu;
+    forward.M.rowwise() += weights.bmu.row(0);
+    // Log-variance: V = H * Wv + bv
+    forward.V = forward.H * weights.Wv;
+    forward.V.rowwise() += weights.bv.row(0);
+
+    // SAMPLE
+    std::normal_distribution<float> normal(0.0f, 1.0f);
+
+    for (int i = 0; i < forward.E.rows(); ++i) {
+        for (int j = 0; j < forward.E.cols(); ++j) {
+            forward.E(i, j) = normal(rng);
+        }
+    }
+    forward.Z = forward.M.array() + (0.5f * forward.V.array()).exp() * forward.E.array();
+
+    // DECODER
+    forward.A2 = forward.H * weights.W2;
+    forward.A2.rowwise() += weights.b2.row(0);
+    forward.H2 = forward.A2.array().cwiseMax(0.0);
+    forward.Yhat = forward.H2 * weights.W3;
     forward.Yhat.rowwise() += weights.b3.row(0);
 
     forward.sigmoid = 1.0 / (1.0 + (-forward.Yhat.array()).exp()); // sigmoid element wise
@@ -130,7 +160,9 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
     Eigen::ArrayXXf s = forward.sigmoid.array().min(1.0f - eps).max(eps);
 
     Eigen::MatrixXf loss_per_entry = -(X.array() * s.log() + (1.0f - X.array()) * (1.0f - s).log()).matrix();
-    forward.loss = loss_per_entry.mean(); // mean over all entries in batch, mean over B & D !
+    forward.lossRec = loss_per_entry.sum() / B;
+    forward.lossKL = 0.5f / B * (forward.M.array().square() + forward.V.array().exp() - 1.0f- forward.V.array()).sum();
+    forward.loss = forward.lossRec + forward.lossKL;
 }
 
 /**
@@ -138,10 +170,10 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
  */
 void decoder(ForwardOutput& forward,const Weights& weights)
 {
-    forward.Z2 = forward.H * weights.W2;
-    forward.Z2.rowwise() += weights.b2.row(0);
-    forward.A2 = forward.Z2.array().cwiseMax(0.0);
-    forward.Yhat = forward.A2 * weights.W3;
+    forward.A2 = forward.H * weights.W2;
+    forward.A2.rowwise() += weights.b2.row(0);
+    forward.H2 = forward.A2.array().cwiseMax(0.0);
+    forward.Yhat = forward.H2 * weights.W3;
     forward.Yhat.rowwise() += weights.b3.row(0);
     forward.sigmoid = 1.0 / (1.0 + (-forward.Yhat.array()).exp()); // sigmoid element wise
 }
@@ -155,22 +187,32 @@ void decoder(ForwardOutput& forward,const Weights& weights)
  */
 void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights& weights,const Eigen::MatrixXf& X)
 {
-    gradients.Gy = (forward.sigmoid - X) / (B * D);
-    gradients.Gw3 = forward.A2.transpose() * gradients.Gy;
+    gradients.Gy = (forward.sigmoid - X) / B;
+    gradients.Gw3 = forward.H2.transpose() * gradients.Gy;
     gradients.Gb3 = gradients.Gy.colwise().sum();
-    gradients.Ga2 = gradients.Gy * weights.W3.transpose();
-    //gradients.Gz2 = gradients.Ga2.array() * (1 - forward.A2.array() * forward.A2.array()); //for tanh
-    Eigen::MatrixXf relu2_mask = (forward.Z2.array() > 0.0f).cast<float>(); // for ReLU
-    gradients.Gz2 = gradients.Ga2.array() * relu2_mask.array();
+    gradients.Gh2 = gradients.Gy * weights.W3.transpose();
+    //gradients.Ga2 = gradients.Gh2.array() * (1 - forward.H2.array() * forward.H2.array()); //for tanh
+    Eigen::MatrixXf relu2_mask = (forward.A2.array() > 0.0f).cast<float>(); // for ReLU
+    gradients.Ga2 = gradients.Gh2.array() * relu2_mask.array();
 
-    gradients.Gw2 = forward.H.transpose() * gradients.Gz2;
-    gradients.Gb2 = gradients.Gz2.colwise().sum();
-    gradients.Gh = gradients.Gz2 * weights.W2.transpose();
-    //gradients.Gz = gradients.Gh.array() * (1 - forward.H.array() * forward.H.array()); // for tanh
-    Eigen::MatrixXf relu1_mask = (forward.X.array() > 0.0f).cast<float>(); // for ReLU
-    gradients.Gz  = gradients.Gh.array() * relu1_mask.array();
-    gradients.Gw1 = X.transpose() * gradients.Gz;
-    gradients.Gb1 = gradients.Gz.colwise().sum();
+    gradients.Gw2 = forward.Z.transpose() * gradients.Ga2;
+    gradients.Gb2 = gradients.Ga2.colwise().sum();
+    gradients.Gz = gradients.Ga2 * weights.W2.transpose();
+
+    // VAEE, .array and * FOR ELEMENT WISE OPERATIONS
+    gradients.Gm = gradients.Gz + forward.M / B;
+    gradients.Gv = 0.5f * gradients.Gz.array() * (0.5f * forward.V.array()).exp() * forward.E.array() + (forward.V.array().exp() - 1.0f) / (2.0f * B);
+    gradients.Gwmu = forward.H.transpose() * gradients.Gm;
+    gradients.Gbmu = gradients.Gm.colwise().sum();
+    gradients.Gwv = forward.H.transpose() * gradients.Gv;
+    gradients.Gbv = gradients.Gv.colwise().sum();
+    gradients.Gh = gradients.Gm * weights.Wmu.transpose() + gradients.Gv * weights.Wv.transpose();
+
+    Eigen::MatrixXf relu1_mask = (forward.X.array() > 0.0f).cast<float>();
+    gradients.Ga1 = gradients.Gh.array() * relu1_mask.array();
+    
+    gradients.Gw1 = X.transpose() * gradients.Ga1;
+    gradients.Gb1 = gradients.Ga1.colwise().sum();
 }
 
 
@@ -200,6 +242,12 @@ void backPropAdam(Weights& weights, const Gradients& gradients, AdamState& opt)
 
     adam_update(weights.W3, gradients.Gw3, opt.mW3, opt.vW3, opt.t, (float)lr);
     adam_update(weights.b3, gradients.Gb3, opt.mb3, opt.vb3, opt.t, (float)lr);
+
+    adam_update(weights.Wmu, gradients.Gwmu,opt.mWmu, opt.vWmu, opt.t, (float)lr);
+    adam_update(weights.bmu, gradients.Gbmu,opt.mbmu, opt.vbmu, opt.t, (float)lr);
+
+    adam_update(weights.Wv, gradients.Gwv, opt.mWv, opt.vWv, opt.t, (float)lr);
+    adam_update(weights.bv, gradients.Gbv, opt.mbv, opt.vbv, opt.t, (float)lr);
 }
 
 
