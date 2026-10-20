@@ -5,7 +5,7 @@
 
 
 // ====== SETTINGS ======
-int H_size = 64;
+int H_size = 400;
 int D = 784;
 int B = 64;
 double lr = 0.0003f;
@@ -146,7 +146,7 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
     forward.Z = forward.M.array() + (0.5f * forward.V.array()).exp() * forward.E.array();
 
     // DECODER
-    forward.A2 = forward.H * weights.W2;
+    forward.A2 = forward.Z * weights.W2;
     forward.A2.rowwise() += weights.b2.row(0);
     forward.H2 = forward.A2.array().cwiseMax(0.0);
     forward.Yhat = forward.H2 * weights.W3;
@@ -170,7 +170,7 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
  */
 void decoder(ForwardOutput& forward,const Weights& weights)
 {
-    forward.A2 = forward.H * weights.W2;
+    forward.A2 = forward.Z * weights.W2;
     forward.A2.rowwise() += weights.b2.row(0);
     forward.H2 = forward.A2.array().cwiseMax(0.0);
     forward.Yhat = forward.H2 * weights.W3;
@@ -198,6 +198,7 @@ void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights&
     gradients.Gw2 = forward.Z.transpose() * gradients.Ga2;
     gradients.Gb2 = gradients.Ga2.colwise().sum();
     gradients.Gz = gradients.Ga2 * weights.W2.transpose();
+
 
     // VAEE, .array and * FOR ELEMENT WISE OPERATIONS
     gradients.Gm = gradients.Gz + forward.M / B;

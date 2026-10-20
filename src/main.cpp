@@ -11,7 +11,8 @@
 
 void generateOutput(std::__1::mt19937 &rng, ForwardOutput &forward, const Weights &weights, int iteration);
 void interpolation(Eigen::MatrixXf &X1, Eigen::MatrixXf &X2, const Weights &weights, ForwardOutput &forward, const double &t);
-size_t iterations = 30000;
+void generateRandomDigits(ForwardOutput &forward, const Weights &weights, std::mt19937 &rng);
+size_t iterations = 7000;
 
 int main()
 {
@@ -30,23 +31,6 @@ int main()
         //X = make_two_images_batch(1234, 1235, B);
         X = (X.array() > 0.5f).cast<float>();
         forwardPass(forward, weights, X,rng);
-        if (i % 100 == 0)
-        {
-            std::cout
-                << "M max abs: "
-                << forward.M.cwiseAbs().maxCoeff()
-
-                << " | V min: "
-                << forward.V.minCoeff()
-
-                << " | V max: "
-                << forward.V.maxCoeff()
-
-                << " | Z max abs: "
-                << forward.Z.cwiseAbs().maxCoeff()
-
-                << std::endl;
-        }
         backPass(gradients, forward, weights, X);
         //backProp(weights,gradients);
         backPropAdam(weights, gradients, opt);
@@ -69,6 +53,7 @@ int main()
     Eigen::MatrixXf X2 = make_batch_mnist(B, rng, true);
     double t = 0.5;
     //interpolation(X1, X2, weights, forward, t);
+    generateRandomDigits(forward, weights, rng);
     return 0;
 }
 
@@ -129,3 +114,38 @@ void interpolation(Eigen::MatrixXf& X1,Eigen::MatrixXf& X2,const Weights& weight
     write_png_grid_mnist(forward.sigmoid, 4, 4, outputPath.str());
 }
 */
+
+void generateRandomDigits( ForwardOutput& forward, const Weights& weights,std::mt19937& rng)
+{
+    std::normal_distribution<float> normal(0.0f, 1.0f);
+
+    // Generate B random latent vectors
+    forward.Z.resize(B, H_size);
+
+    for (int i = 0; i < B; ++i)
+    {
+        for (int j = 0; j < H_size; ++j)
+        {
+            forward.Z(i,j) = normal(rng);
+        }
+    }
+
+    // Decode the random latent vectors
+    decoder(forward, weights);
+
+    // Save generated images
+    write_png_grid_mnist(
+        forward.sigmoid,
+        8,
+        8,
+        "generated_digits.png"
+    );
+    Eigen::MatrixXf binary =
+    (forward.sigmoid.array() > 0.5f).cast<float>();
+
+    write_png_grid_mnist(
+        binary,
+        8, 8,
+        "generated_binary.png"
+    );
+}
