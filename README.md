@@ -53,7 +53,7 @@ The hidden and latent dimensions are both 64 in this version. One thing I want t
 For a batch of flattened images, the encoder computes
 
 ```math
-H = \operatorname{ReLU}(XW_1+b_1)
+H = \mathrm{ReLU}(XW_1+b_1)
 ```
 
 and predicts the mean and log-variance of a diagonal Gaussian:
@@ -65,7 +65,7 @@ M = HW_\mu+b_\mu, \qquad V = HW_v+b_v.
 Instead of sampling directly from this distribution, I use the **reparameterization trick**:
 
 ```math
-E \sim \mathcal N(0,I), \qquad Z=M+\exp(V/2)\odot E.
+E \sim \mathcal{N}(0,I), \qquad Z=M+\exp(V/2)\odot E.
 ```
 
 This lets gradients propagate through the sampling step.
@@ -77,20 +77,20 @@ The decoder then takes `Z`, applies a linear layer, ReLU, another linear layer, 
 The training objective is the negative ELBO, averaged over the batch:
 
 ```math
-\mathcal L=\mathcal L_{\mathrm{rec}}+\mathcal L_{\mathrm{KL}}.
+\mathcal{L}=\mathcal{L}_{\mathrm{rec}}+\mathcal{L}_{\mathrm{KL}}.
 ```
 
 For the binarized images, reconstruction uses binary cross-entropy (summed over pixels, averaged over images):
 
 ```math
-\mathcal L_{\mathrm{rec}}=-\frac1B\sum_{b=1}^{B}\sum_{j=1}^{784}
+\mathcal{L}_{\mathrm{rec}}=-\frac1B\sum_{b=1}^{B}\sum_{j=1}^{784}
 \left[x_{bj}\log\hat x_{bj}+(1-x_{bj})\log(1-\hat x_{bj})\right].
 ```
 
 The KL term keeps the encoded distribution close to the standard normal prior:
 
 ```math
-\mathcal L_{\mathrm{KL}}=\frac1{2B}\sum_{b=1}^{B}\sum_{k=1}^{d}
+\mathcal{L}_{\mathrm{KL}}=\frac1{2B}\sum_{b=1}^{B}\sum_{k=1}^{d}
 \left[M_{bk}^{2}+\exp(V_{bk})-1-V_{bk}\right].
 ```
 
@@ -134,10 +134,10 @@ Writing the network as matrix operations makes it easier to check dimensions and
 
 ```math
 \begin{aligned}
-A_1 &= XW_1+b_1, & H &= \operatorname{ReLU}(A_1),\\
+A_1 &= XW_1+b_1, & H &= \mathrm{ReLU}(A_1),\\
 M &= HW_\mu+b_\mu, & V &= HW_v+b_v,\\
-Z &= M+e^{V/2}\odot E, & E_{bk} &\sim \mathcal N(0,1),\\
-A_2 &= ZW_2+b_2, & H_2 &= \operatorname{ReLU}(A_2),\\
+Z &= M+e^{V/2}\odot E, & E_{bk} &\sim \mathcal{N}(0,1),\\
+A_2 &= ZW_2+b_2, & H_2 &= \mathrm{ReLU}(A_2),\\
 Y &= H_2W_3+b_3, & \hat X &= \sigma(Y).
 \end{aligned}
 ```
@@ -146,13 +146,13 @@ For a batch of $B$ images, with input dimension $D=784$, hidden size $h=64$, and
 
 ```math
 \begin{aligned}
-X,\hat X,Y &\in\mathbb R^{B\times D},\\
-H,A_1,H_2,A_2 &\in\mathbb R^{B\times h},\\
-M,V,Z,E &\in\mathbb R^{B\times d},\\
-W_1 &\in\mathbb R^{D\times h},\\
-W_\mu,W_v &\in\mathbb R^{h\times d},\\
-W_2 &\in\mathbb R^{d\times h},\\
-W_3 &\in\mathbb R^{h\times D}.
+X,\hat X,Y &\in\mathbb{R}^{B\times D},\\
+H,A_1,H_2,A_2 &\in\mathbb{R}^{B\times h},\\
+M,V,Z,E &\in\mathbb{R}^{B\times d},\\
+W_1 &\in\mathbb{R}^{D\times h},\\
+W_\mu,W_v &\in\mathbb{R}^{h\times d},\\
+W_2 &\in\mathbb{R}^{d\times h},\\
+W_3 &\in\mathbb{R}^{h\times D}.
 \end{aligned}
 ```
 
@@ -164,7 +164,7 @@ G_Y &= \frac{\hat X-X}{B},\\[3pt]
 G_{W_3} &= H_2^T G_Y,
 & G_{b_3} &= \sum_{b=1}^B G_Y[b,:],\\[3pt]
 G_{H_2} &= G_YW_3^T,\\[3pt]
-G_{A_2} &= G_{H_2}\odot\mathbf 1_{A_2>0},\\[3pt]
+G_{A_2} &= G_{H_2}\odot\mathbf{1}_{A_2>0},\\[3pt]
 G_{W_2} &= Z^TG_{A_2},
 & G_{b_2} &= \sum_{b=1}^B G_{A_2}[b,:],\\[3pt]
 G_Z &= G_{A_2}W_2^T.
@@ -199,7 +199,7 @@ G_{W_\mu} &= H^TG_M,
 G_{W_v} &= H^TG_V,
 & G_{b_v} &= \sum_{b=1}^B G_V[b,:],\\[3pt]
 G_H &= G_MW_\mu^T+G_VW_v^T,\\[3pt]
-G_{A_1} &= G_H\odot\mathbf 1_{A_1>0},\\[3pt]
+G_{A_1} &= G_H\odot\mathbf{1}_{A_1>0},\\[3pt]
 G_{W_1} &= X^TG_{A_1},
 & G_{b_1} &= \sum_{b=1}^B G_{A_1}[b,:].
 \end{aligned}
@@ -210,8 +210,8 @@ G_{W_1} &= X^TG_{A_1},
 The encoder outputs a diagonal Gaussian, and the prior is a standard normal distribution:
 
 ```math
-q_\phi(z\mid x)=\mathcal N\!\left(\mu,\operatorname{diag}(\sigma^2)\right),
-\qquad p(z)=\mathcal N(0,I),
+q_\phi(z\mid x)=\mathcal{N}\!\left(\mu,\mathrm{diag}(\sigma^2)\right),
+\qquad p(z)=\mathcal{N}(0,I),
 \qquad V=\log\sigma^2.
 ```
 
@@ -241,9 +241,9 @@ In particular, its derivatives are simple, which is why the KL gradients can be 
 
 ```math
 \boxed{
-\frac{\partial\mathcal L_{\mathrm{KL}}}{\partial M}=\frac MB,
+\frac{\partial\mathcal{L}_{\mathrm{KL}}}{\partial M}=\frac MB,
 \qquad
-\frac{\partial\mathcal L_{\mathrm{KL}}}{\partial V}=\frac{e^V-1}{2B}
+\frac{\partial\mathcal{L}_{\mathrm{KL}}}{\partial V}=\frac{e^V-1}{2B}
 }
 ```
 
