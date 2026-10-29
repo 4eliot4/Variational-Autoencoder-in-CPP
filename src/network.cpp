@@ -8,6 +8,12 @@
 int H_size = 400;
 int D = 784;
 int B = 64;
+int channels = 32; // number of filters
+int kernel = 4; // kernel size
+int stride = 2;
+int padding = 1; // number of padding per side 
+
+
 double lr = 0.0003f;
 
 auto xavier = [](int fan_in, int fan_out){ return std::sqrt(2.0f / float(fan_in + fan_out)); };
