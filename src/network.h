@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 #include <iostream>
 #include <random>
-
+#include "conv.h"
 // ====== CONSTANTS ======
 extern int H_size;
 extern int D;
@@ -26,6 +26,8 @@ struct Weights
     Eigen::MatrixXf bmu;
     Eigen::MatrixXf Wv;
     Eigen::MatrixXf bv;
+    Conv2D conv1;
+    Conv2D conv2;
     Weights();
     void print();
 };
@@ -41,6 +43,9 @@ struct ForwardOutput
     Eigen::MatrixXf H2;
     Eigen::MatrixXf Yhat;
     Eigen::MatrixXf sigmoid; // sigmoid of Y
+    Tensor4D convInput;
+    Tensor4D convA1, convH1;
+    Tensor4D convA2, convH2;
     double loss;
     double lossRec;
     double lossKL;
@@ -52,8 +57,33 @@ struct Gradients
 {
     Eigen::MatrixXf Gy, Gw3,Gh2,Ga2,Gm,Gv,Gwmu,Gwv,Gw2, Gh,Ga1, Gz, Gw1;
     Eigen::MatrixXf Gb3,Gb2,Gbv,Gbmu,Gb1;
+    Tensor4D Gconv1W;
+    Tensor4D Gconv2W;
+
+    Eigen::VectorXf Gconv1b;
+    Eigen::VectorXf Gconv2b;
     Gradients();
 };
+
+struct ConvAdamState
+{
+    Tensor4D mW;
+    Tensor4D vW;
+
+    Eigen::VectorXf mb;
+    Eigen::VectorXf vb;
+
+    ConvAdamState(int Cin, int Cout, int K)
+        : mW(Cout, Cin, K, K),
+          vW(Cout, Cin, K, K),
+          mb(Eigen::VectorXf::Zero(Cout)),
+          vb(Eigen::VectorXf::Zero(Cout))
+    {
+        mW.setZero();
+        vW.setZero();
+    }
+};
+
 struct AdamState 
 {
     // moments for each parameter
@@ -72,6 +102,9 @@ struct AdamState
     Eigen::MatrixXf mWv, vWv;
     Eigen::MatrixXf mbv, vbv;
 
+    ConvAdamState conv1{1, 32, 4};
+    ConvAdamState conv2{32, 64, 4};
+
     int t = 0;
 
     AdamState()
@@ -87,6 +120,8 @@ struct AdamState
         mbv(Eigen::MatrixXf::Zero(1, H_size)), vbv(Eigen::MatrixXf::Zero(1, H_size))
     {}
 };
+
+
 
 void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X,std::mt19937& rng);
 void decoder(ForwardOutput &forward, const Weights &weights);

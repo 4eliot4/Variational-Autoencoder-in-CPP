@@ -15,9 +15,15 @@ struct Conv2D
 
     Conv2D(int Cin, int Cout, int K, int S, int P);
 };
+struct ConvGradients
+{
+    Tensor4D dW;
+    Eigen::VectorXf db;
+    Tensor4D dX;
+};
 
 Tensor4D convForward(const Tensor4D& X, const Conv2D& layer);
-
-
-
+Tensor4D reluForward(const Tensor4D &X);
+ConvGradients convBackward(const Tensor4D& X,const Conv2D& layer,const Tensor4D& dY);
+Tensor4D reluBackward(const Tensor4D &A, const Tensor4D &dH);
 #endif

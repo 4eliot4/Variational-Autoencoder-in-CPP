@@ -8,10 +8,13 @@
 int H_size = 400;
 int D = 784;
 int B = 64;
+int channels_in = 1;
 int channels = 32; // number of filters
 int kernel = 4; // kernel size
 int stride = 2;
 int padding = 1; // number of padding per side 
+constexpr int LATENT_SIZE = 16;
+constexpr int FEATURE_SIZE = 64 * 7 * 7; // 3136
 
 
 double lr = 0.0003f;
@@ -20,14 +23,16 @@ auto xavier = [](int fan_in, int fan_out){ return std::sqrt(2.0f / float(fan_in 
 
 Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size) * xavier(D, H_size)),
                      b1(Eigen::MatrixXf::Zero(1,H_size)),
-                     W2(Eigen::MatrixXf::Random(H_size,H_size) * xavier(H_size, H_size)),
+                     W2(Eigen::MatrixXf::Random(LATENT_SIZE, H_size) * xavier(LATENT_SIZE, H_size)),
                      b2(Eigen::MatrixXf::Zero(1,H_size)),
                      W3(Eigen::MatrixXf::Random(H_size,D) * xavier(H_size, D)),
                      b3(Eigen::MatrixXf::Zero(1,D)),
-                     Wmu(Eigen::MatrixXf::Random(H_size,H_size) * xavier(H_size,H_size)),
-                     bmu(Eigen::MatrixXf::Zero(1,H_size)),
-                     Wv(Eigen::MatrixXf::Random(H_size,H_size) * xavier(H_size,H_size)),
-                     bv(Eigen::MatrixXf::Zero(1,H_size))
+                     Wmu(Eigen::MatrixXf::Random(FEATURE_SIZE, LATENT_SIZE)* xavier(FEATURE_SIZE, LATENT_SIZE)),
+                     bmu(Eigen::MatrixXf::Zero(1, LATENT_SIZE)),
+                     Wv(Eigen::MatrixXf::Random(FEATURE_SIZE, LATENT_SIZE) * xavier(FEATURE_SIZE, LATENT_SIZE)),
+                     bv(Eigen::MatrixXf::Zero(1, LATENT_SIZE)),
+                     conv1(channels_in, channels, kernel, stride, padding),
+                     conv2(channels, B, kernel, stride, padding)
                      {}
                      
 
@@ -82,15 +87,20 @@ void Weights::print()
 }
 
 ForwardOutput::ForwardOutput() : X(B, H_size),
-                                 H(B, H_size),
-                                 M( B,H_size),
-                                 V(B,H_size), 
-                                 E(B,H_size),
-                                 Z(B,H_size),
+                                 H(B, FEATURE_SIZE),
+                                 M(B, LATENT_SIZE),
+                                 V(B, LATENT_SIZE),
+                                 E(B, LATENT_SIZE),
+                                 Z(B, LATENT_SIZE),
                                  A2(B,H_size),
                                  H2(B,H_size),
                                  Yhat(B, D),
-                                 sigmoid(B,D) 
+                                 sigmoid(B,D),
+                                 convInput(B, 1, 28, 28),
+                                 convA1(B, 32, 14, 14),
+                                 convH1(B, 32, 14, 14),
+                                 convA2(B, 64, 7, 7),
+                                 convH2(B, 64, 7, 7) 
                                  {}
 void ForwardOutput::lossPrint()
 {
@@ -117,7 +127,11 @@ Gradients::Gradients() : Gy(B, D),
                          Gb2(1, H_size), 
                          Gbv(1,H_size),
                          Gbmu(1,H_size),
-                         Gb1(1, H_size)
+                         Gb1(1, H_size),
+                         Gconv1W(32, 1, 4, 4),
+                         Gconv2W(64, 32, 4, 4),
+                         Gconv1b(Eigen::VectorXf::Zero(32)),
+                         Gconv2b(Eigen::VectorXf::Zero(64))
                          {}
 
 Eigen::MatrixXf Gy, Gw3,Gh2,Ga2,Gm,Gv,Gw2, Gh, Gz, Gw1;
@@ -130,9 +144,22 @@ Eigen::MatrixXf Gy, Gw3,Gh2,Ga2,Gm,Gv,Gw2, Gh, Gz, Gw1;
  */
 void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::MatrixXf& X,std::mt19937& rng)
 {
-    forward.X = X * weights.W1;
-    forward.X.rowwise() += weights.b1.row(0); // same param b across all images
-    forward.H = forward.X.array().cwiseMax(0.0); // element wise ReLU
+
+
+    // CNN encoeder
+    forward.convInput = matrixToTensor(X);
+
+    // First conv
+    forward.convA1 = convForward(forward.convInput, weights.conv1);
+    forward.convH1 = reluForward(forward.convA1);
+
+    // Second conv
+    forward.convA2 = convForward(forward.convH1, weights.conv2);
+    forward.convH2 = reluForward(forward.convA2);
+
+    // Flatten for the Gauss
+    forward.H = flatten(forward.convH2);
+
     // VAE
     // Mean: M = H * Wmu + bmu
     forward.M = forward.H * weights.Wmu;
@@ -141,6 +168,7 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
     forward.V = forward.H * weights.Wv;
     forward.V.rowwise() += weights.bv.row(0);
 
+    forward.E.resize(forward.M.rows(), forward.M.cols());
     // SAMPLE
     std::normal_distribution<float> normal(0.0f, 1.0f);
 
@@ -215,14 +243,91 @@ void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights&
     gradients.Gbv = gradients.Gv.colwise().sum();
     gradients.Gh = gradients.Gm * weights.Wmu.transpose() + gradients.Gv * weights.Wv.transpose();
 
-    Eigen::MatrixXf relu1_mask = (forward.X.array() > 0.0f).cast<float>();
-    gradients.Ga1 = gradients.Gh.array() * relu1_mask.array();
-    
-    gradients.Gw1 = X.transpose() * gradients.Ga1;
-    gradients.Gb1 = gradients.Ga1.colwise().sum();
+    // Restore spatial dimensions:
+    Tensor4D dHconv2 = unflatten(gradients.Gh, 64, 7, 7);
+
+    // Backpropagate through the second ReLU
+    Tensor4D dAconv2 = reluBackward(forward.convA2, dHconv2);
+
+    // Backpropagate through the second convolution
+    ConvGradients G2 = convBackward(forward.convH1, weights.conv2, dAconv2);
+    Tensor4D dAconv1 = reluBackward(forward.convA1, G2.dX);
+
+    // 5. Backpropagate through the first convolution
+    ConvGradients G1 = convBackward(forward.convInput, weights.conv1, dAconv1);
+
+    // 6. Store trainable-parameter gradients
+    gradients.Gconv2W = G2.dW;
+    gradients.Gconv2b = G2.db;
+
+    gradients.Gconv1W = G1.dW;
+    gradients.Gconv1b = G1.db;
+
+}
+
+static void ensureMoments(Eigen::MatrixXf& m,Eigen::MatrixXf& v,const Eigen::MatrixXf& theta)
+{
+    if (m.rows() != theta.rows() ||
+        m.cols() != theta.cols() ||
+        v.rows() != theta.rows() ||
+        v.cols() != theta.cols())
+    {
+        m.setZero(theta.rows(), theta.cols());
+        v.setZero(theta.rows(), theta.cols());
+    }
+}
+static void adam_update_tensor(Tensor4D& theta,const Tensor4D& grad,Tensor4D& m,Tensor4D& v,int t,float lr)
+{
+    constexpr float beta1 = 0.9f;
+    constexpr float beta2 = 0.999f;
+    constexpr float eps = 1e-8f;
+
+    if (grad.size() != theta.size() ||
+        m.size() != theta.size() ||
+        v.size() != theta.size())
+        throw std::invalid_argument("Adam tensor size mismatch");
+
+    const float correction1 = 1.0f - std::pow(beta1, float(t));
+    const float correction2 = 1.0f - std::pow(beta2, float(t));
+
+    for (Eigen::Index i = 0; i < theta.size(); ++i)
+    {
+        const float g = grad.data()[i];
+
+        m.data()[i] =
+            beta1 * m.data()[i] + (1.0f - beta1) * g;
+
+        v.data()[i] =
+            beta2 * v.data()[i] + (1.0f - beta2) * g * g;
+
+        const float mhat = m.data()[i] / correction1;
+        const float vhat = v.data()[i] / correction2;
+
+        theta.data()[i] -=
+            lr * mhat / (std::sqrt(vhat) + eps);
+    }
 }
 
 
+static void adam_update_vector(Eigen::VectorXf& theta,const Eigen::VectorXf& grad,Eigen::VectorXf& m,Eigen::VectorXf& v,int t,float lr)
+{
+    constexpr float beta1 = 0.9f;
+    constexpr float beta2 = 0.999f;
+    constexpr float eps = 1e-8f;
+
+    const float c1 = 1.0f - std::pow(beta1, float(t));
+    const float c2 = 1.0f - std::pow(beta2, float(t));
+
+    m = beta1 * m + (1.0f - beta1) * grad;
+
+    v.array() =
+        beta2 * v.array()
+        + (1.0f - beta2) * grad.array().square();
+
+    theta.array() -=
+        lr * (m.array() / c1)
+        / ((v.array() / c2).sqrt() + eps);
+}
 /**
  * @brief Updates the network weights using gradient descent.
  * @param weights REF : Model weights to update.
@@ -241,8 +346,22 @@ void backPropAdam(Weights& weights, const Gradients& gradients, AdamState& opt)
 {
     opt.t += 1; // one step per minibatch
 
-    adam_update(weights.W1, gradients.Gw1, opt.mW1, opt.vW1, opt.t, (float)lr);
-    adam_update(weights.b1, gradients.Gb1, opt.mb1, opt.vb1, opt.t, (float)lr);
+    // ensure correct dim
+    ensureMoments(opt.mWmu, opt.vWmu, weights.Wmu);
+    ensureMoments(opt.mWv,  opt.vWv,  weights.Wv);
+    ensureMoments(opt.mW2,  opt.vW2,  weights.W2);
+
+    ensureMoments(opt.mbmu, opt.vbmu, weights.bmu);
+    ensureMoments(opt.mbv,  opt.vbv,  weights.bv);
+    // First conv
+    adam_update_tensor(weights.conv1.W, gradients.Gconv1W,opt.conv1.mW, opt.conv1.vW,opt.t, float(lr));
+    adam_update_vector(weights.conv1.b, gradients.Gconv1b,opt.conv1.mb, opt.conv1.vb,opt.t, float(lr));
+
+    // Second conv
+    adam_update_tensor(weights.conv2.W, gradients.Gconv2W,opt.conv2.mW, opt.conv2.vW,opt.t, float(lr));
+    adam_update_vector(weights.conv2.b, gradients.Gconv2b,opt.conv2.mb, opt.conv2.vb,opt.t, float(lr));
+
+
 
     adam_update(weights.W2, gradients.Gw2, opt.mW2, opt.vW2, opt.t, (float)lr);
     adam_update(weights.b2, gradients.Gb2, opt.mb2, opt.vb2, opt.t, (float)lr);
@@ -256,6 +375,10 @@ void backPropAdam(Weights& weights, const Gradients& gradients, AdamState& opt)
     adam_update(weights.Wv, gradients.Gwv, opt.mWv, opt.vWv, opt.t, (float)lr);
     adam_update(weights.bv, gradients.Gbv, opt.mbv, opt.vbv, opt.t, (float)lr);
 }
+
+
+
+
 
 
 
