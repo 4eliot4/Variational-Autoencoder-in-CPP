@@ -39,7 +39,7 @@ int main()
         {
             std::cout << "loss after :" << i << "iterations : "; forward.lossPrint();
         }
-        if(i % 5000 == 0)
+        if(i % 1000 == 0)
         {
             generateOutput(rng, forward, weights, i);
             std::ostringstream hPath;
