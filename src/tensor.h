@@ -5,7 +5,7 @@
 #include <unsupported/Eigen/CXX11/Tensor>
 
 using Tensor4D = Eigen::Tensor<float, 4, Eigen::RowMajor>;
-Tensor4D matrixToTensor(const Eigen::MatrixXf& X);
+Tensor4D matrixToTensor(const Eigen::MatrixXf& X,int C,int H,int W);
 
 Eigen::MatrixXf flatten(const Tensor4D& X);
 

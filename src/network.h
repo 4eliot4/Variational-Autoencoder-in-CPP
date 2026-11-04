@@ -13,6 +13,30 @@ extern double lr;
 
 
 
+inline constexpr int IMAGE_SIZE = 28;
+
+inline constexpr int channels_in = 1;
+inline constexpr int channels_1 = 32;
+inline constexpr int channels_2 = 64;
+
+inline constexpr int kernel = 4;
+inline constexpr int stride = 2;
+inline constexpr int padding = 1;
+
+
+inline constexpr int CONV1_SIZE = (IMAGE_SIZE + 2 * padding - kernel) / stride + 1;
+inline constexpr int CONV2_SIZE = (CONV1_SIZE + 2 * padding - kernel) / stride + 1;
+
+
+inline constexpr int DECONV1_SIZE = (CONV2_SIZE - 1) * stride - 2 * padding + kernel;
+inline constexpr int DECONV2_SIZE = (DECONV1_SIZE - 1) * stride - 2 * padding + kernel;
+inline constexpr int LATENT_SIZE = 32;
+inline constexpr int FEATURE_SIZE = channels_2 * CONV2_SIZE * CONV2_SIZE;
+inline constexpr int INPUT_SIZE = channels_in * IMAGE_SIZE * IMAGE_SIZE;
+static_assert(DECONV2_SIZE == IMAGE_SIZE,"Decoder output must match input image size");
+
+
+
 struct Weights
 {
     // Eigen::MatrixXf W1(256,H); wrong: its not gonna call the constructor
@@ -28,6 +52,8 @@ struct Weights
     Eigen::MatrixXf bv;
     Conv2D conv1;
     Conv2D conv2;
+    ConvTranspose2D deconv1;
+    ConvTranspose2D deconv2;
     Weights();
     void print();
 };
@@ -46,6 +72,10 @@ struct ForwardOutput
     Tensor4D convInput;
     Tensor4D convA1, convH1;
     Tensor4D convA2, convH2;
+    Tensor4D decInput;  // (B,64,7,7)
+    Tensor4D decA1;     // (B,32,14,14) 
+    Tensor4D decH1;     // (B,32,14,14)
+    Tensor4D decA2;     // (B,1,28,28)
     double loss;
     double lossRec;
     double lossKL;
@@ -62,6 +92,11 @@ struct Gradients
 
     Eigen::VectorXf Gconv1b;
     Eigen::VectorXf Gconv2b;
+    Tensor4D Gdeconv1W;
+    Tensor4D Gdeconv2W;
+
+    Eigen::VectorXf Gdeconv1b;
+    Eigen::VectorXf Gdeconv2b;
     Gradients();
 };
 
@@ -102,29 +137,40 @@ struct AdamState
     Eigen::MatrixXf mWv, vWv;
     Eigen::MatrixXf mbv, vbv;
 
-    ConvAdamState conv1{1, 32, 4};
-    ConvAdamState conv2{32, 64, 4};
+        
+    ConvAdamState conv1{channels_in, channels_1, kernel};
+    ConvAdamState conv2{channels_1, channels_2, kernel};
+
+    ConvAdamState deconv1{channels_2, channels_1, kernel};
+    ConvAdamState deconv2{channels_1, channels_in, kernel};
+
 
     int t = 0;
 
     AdamState()
-      : mW1(Eigen::MatrixXf::Zero(D, H_size)), vW1(Eigen::MatrixXf::Zero(D, H_size)),
-        mb1(Eigen::MatrixXf::Zero(1, H_size)), vb1(Eigen::MatrixXf::Zero(1, H_size)),
-        mW2(Eigen::MatrixXf::Zero(H_size, H_size)), vW2(Eigen::MatrixXf::Zero(H_size, H_size)),
-        mb2(Eigen::MatrixXf::Zero(1, H_size)), vb2(Eigen::MatrixXf::Zero(1, H_size)),
-        mW3(Eigen::MatrixXf::Zero(H_size, D)), vW3(Eigen::MatrixXf::Zero(H_size, D)),
-        mb3(Eigen::MatrixXf::Zero(1, D)), vb3(Eigen::MatrixXf::Zero(1, D)),
-        mWmu(Eigen::MatrixXf::Zero(H_size, H_size)), vWmu(Eigen::MatrixXf::Zero(H_size, H_size)),
-        mbmu(Eigen::MatrixXf::Zero(1, H_size)), vbmu(Eigen::MatrixXf::Zero(1, H_size)),
-        mWv(Eigen::MatrixXf::Zero(H_size, H_size)), vWv(Eigen::MatrixXf::Zero(H_size, H_size)),
-        mbv(Eigen::MatrixXf::Zero(1, H_size)), vbv(Eigen::MatrixXf::Zero(1, H_size))
+      : 
+        mW2(Eigen::MatrixXf::Zero(LATENT_SIZE, FEATURE_SIZE)),
+        vW2(Eigen::MatrixXf::Zero(LATENT_SIZE, FEATURE_SIZE)),
+
+        mb2(Eigen::MatrixXf::Zero(1, FEATURE_SIZE)),
+        vb2(Eigen::MatrixXf::Zero(1, FEATURE_SIZE)),
+
+        mWmu(Eigen::MatrixXf::Zero(FEATURE_SIZE, LATENT_SIZE)),
+        vWmu(Eigen::MatrixXf::Zero(FEATURE_SIZE, LATENT_SIZE)),
+
+        mbmu(Eigen::MatrixXf::Zero(1, LATENT_SIZE)),
+        vbmu(Eigen::MatrixXf::Zero(1, LATENT_SIZE)),
+
+        mWv(Eigen::MatrixXf::Zero(FEATURE_SIZE, LATENT_SIZE)),
+        vWv(Eigen::MatrixXf::Zero(FEATURE_SIZE, LATENT_SIZE)),
+
+        mbv(Eigen::MatrixXf::Zero(1, LATENT_SIZE)),
+        vbv(Eigen::MatrixXf::Zero(1, LATENT_SIZE))
     {}
 };
 
-
-
-void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X,std::mt19937& rng);
 void decoder(ForwardOutput &forward, const Weights &weights);
+void forwardPass(ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X, std::mt19937 &rng);
 void backPass(Gradients &gradients, const ForwardOutput &forward, const Weights &weights, const Eigen::MatrixXf &X);
 void backProp(Weights &weights, const Gradients &gradients);
 void backPropAdam(Weights& weights, const Gradients& gradients, AdamState& opt);

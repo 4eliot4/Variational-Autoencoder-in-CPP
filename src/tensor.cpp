@@ -6,28 +6,32 @@
 * @brief Converts MNIST input image to 4D tensor
 * @param X Input image in Matrix format
 */
-Tensor4D matrixToTensor(const Eigen::MatrixXf& X)
+
+Tensor4D matrixToTensor(
+    const Eigen::MatrixXf& X,
+    int C,
+    int H,
+    int W)
 {
-    const int B = X.rows();
+    if (C <= 0 || H <= 0 || W <= 0 || X.cols() != C * H * W)
+        throw std::invalid_argument("Invalid matrix-to-tensor dimensions");
 
-    if (X.cols() != 784)
-        throw std::runtime_error("Not Loading the MNIST dataset");
+    const int batch = X.rows();
 
-    Tensor4D result(B, 1, 28, 28); // MNIST contains 1 channel (grayscale)
+    Tensor4D T(batch, C, H, W);
 
-    for (int b = 0; b < B; ++b)
-    {
-        for (int i = 0; i < 28; ++i)
-        {
-            for (int j = 0; j < 28; ++j)
-            {
-                result(b, 0, i, j) = X(b, i * 28 + j); // flat index i * 28 + j
-            }
-        }
-    }
+    for (int b = 0; b < batch; ++b)
+        for (int c = 0; c < C; ++c)
+            for (int i = 0; i < H; ++i)
+                for (int j = 0; j < W; ++j)
+                {
+                    const int col = (c * H + i) * W + j;
+                    T(b, c, i, j) = X(b, col);
+                }
 
-    return result;
+    return T;
 }
+
 
 
 

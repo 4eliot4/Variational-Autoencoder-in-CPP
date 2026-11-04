@@ -5,6 +5,54 @@
 #include <algorithm>
 
 
+using DeconvRowMatrix = Eigen::Matrix<
+    float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor
+>;
+
+// (B,Cin,H,W) -> (B*H*W,Cin)
+static DeconvRowMatrix deconvInputToMatrix(const Tensor4D& X)
+{
+    const int B = X.dimension(0);
+    const int Cin = X.dimension(1);
+    const int H = X.dimension(2);
+    const int W = X.dimension(3);
+
+    DeconvRowMatrix A(B * H * W, Cin);
+
+    for (int b = 0; b < B; ++b)
+        for (int i = 0; i < H; ++i)
+            for (int j = 0; j < W; ++j)
+            {
+                const int row = (b * H + i) * W + j;
+
+                for (int c = 0; c < Cin; ++c)
+                    A(row, c) = X(b, c, i, j);
+            }
+
+    return A;
+}
+
+// (Cout,Cin,K,K) -> (Cin,Cout*K*K)
+static Eigen::MatrixXf deconvWeightsToMatrix(const ConvTranspose2D& layer)
+{
+    const int Cout = layer.W.dimension(0);
+    const int Cin = layer.W.dimension(1);
+    const int K = layer.W.dimension(2);
+
+    Eigen::MatrixXf Wmat(Cin, Cout * K * K);
+
+    for (int c = 0; c < Cin; ++c)
+        for (int o = 0; o < Cout; ++o)
+            for (int u = 0; u < K; ++u)
+                for (int v = 0; v < K; ++v)
+                {
+                    const int col = (o * K + u) * K + v;
+                    Wmat(c, col) = layer.W(o, c, u, v);
+                }
+
+    return Wmat;
+}
+
 
 Conv2D::Conv2D(int Cin, int Cout, int K, int S, int P)
     : W(Cout, Cin, K, K),
@@ -15,16 +63,208 @@ Conv2D::Conv2D(int Cin, int Cout, int K, int S, int P)
     if (Cin <= 0 || Cout <= 0 || K <= 0 || S <= 0 || P < 0)
         throw std::invalid_argument("Invalid Conv2D parameters");
 
-    const float scale = std::sqrt(2.0f / (Cin * K * K));    
+    
+    const float scale = std::sqrt(6.0f / float(Cin * K * K));
 
     W.setRandom();
+
+    for (Eigen::Index i = 0; i < W.size(); ++i)
+    {
+        W.data()[i] =
+            (2.0f * W.data()[i] - 1.0f) * scale;
+    }
+
+}
+
+ConvTranspose2D::ConvTranspose2D(int Cin, int Cout, int K, int S, int P)
+    : W(Cout, Cin, K, K),
+      b(Eigen::VectorXf::Zero(Cout)),
+      stride(S),
+      padding(P)
+{
+    if (Cin <= 0 || Cout <= 0 || K <= 0 ||
+        S <= 0 || P < 0)
+    {
+        throw std::invalid_argument(
+            "Invalid transposed convolution parameters"
+        );
+    }
+
+    W.setRandom();
+
+    // Variance-scaled uniform initialization
+    const float scale =
+        std::sqrt(6.0f / float(Cin * K * K));
+
+    for (Eigen::Index i = 0; i < W.size(); ++i)
+        W.data()[i] = (2.0f * W.data()[i] - 1.0f) * scale;
+}
+
+
+
+Tensor4D convTransposeForward(const Tensor4D& X,const ConvTranspose2D& layer)
+{
+    const int B = X.dimension(0);
+    const int Cin = X.dimension(1);
+    const int H = X.dimension(2);
+    const int Win = X.dimension(3);
+
+    const int Cout = layer.W.dimension(0);
+    const int K = layer.W.dimension(2);
+    const int S = layer.stride;
+    const int P = layer.padding;
+
+    if (S <= 0 || P < 0 || layer.W.dimension(1) != Cin || layer.W.dimension(3) != K || layer.b.size() != Cout)
+        throw std::invalid_argument("Invalid transposed convolution dimensions");
+
+    const int Hout = (H - 1) * S - 2 * P + K;
+    const int Wout = (Win - 1) * S - 2 * P + K;
+
+    if (Hout <= 0 || Wout <= 0)
+        throw std::invalid_argument("Invalid output size");
+
+    const int N = B * H * Win;
+    const int F = Cout * K * K;
+
+    // 1. Convert inputs and filters to matrices
+    DeconvRowMatrix Xmat = deconvInputToMatrix(X);
+    Eigen::MatrixXf Wmat = deconvWeightsToMatrix(layer);
+
+    // 2. Perform the expensive computation with Eigen
+    // (N,Cin) * (Cin,F) -> (N,F)
+    DeconvRowMatrix patches(N, F);
+    patches.noalias() = Xmat * Wmat;
+
+    // 3. Initialize output with biases
+    Tensor4D Y(B, Cout, Hout, Wout);
+
+    for (int b = 0; b < B; ++b)
+        for (int o = 0; o < Cout; ++o)
+            for (int h = 0; h < Hout; ++h)
+                for (int w = 0; w < Wout; ++w)
+                    Y(b, o, h, w) = layer.b(o);
+
+    // 4. Scatter patch contributions into the output
+    for (int b = 0; b < B; ++b)
+        for (int i = 0; i < H; ++i)
+            for (int j = 0; j < Win; ++j)
+            {
+                const int row = (b * H + i) * Win + j;
+
+                for (int o = 0; o < Cout; ++o)
+                    for (int u = 0; u < K; ++u)
+                        for (int v = 0; v < K; ++v)
+                        {
+                            const int h = i * S + u - P;
+                            const int w = j * S + v - P;
+
+                            if (h < 0 || h >= Hout || w < 0 || w >= Wout)
+                                continue;
+
+                            const int col = (o * K + u) * K + v;
+
+                            Y(b, o, h, w) += patches(row, col);
+                        }
+            }
+
+    return Y;
+}
+
+
+
+
+ConvGradients convTransposeBackward(const Tensor4D& X,const ConvTranspose2D& layer,const Tensor4D& dY)
+{
+    const int B = X.dimension(0);
+    const int Cin = X.dimension(1);
+    const int H = X.dimension(2);
+    const int Win = X.dimension(3);
+
+    const int Cout = layer.W.dimension(0);
+    const int K = layer.W.dimension(2);
+    const int S = layer.stride;
+    const int P = layer.padding;
+
+    if (S <= 0 || P < 0 || layer.W.dimension(1) != Cin || layer.W.dimension(3) != K || layer.b.size() != Cout)
+        throw std::invalid_argument("Invalid transposed convolution dimensions");
+
+    const int Hout = (H - 1) * S - 2 * P + K;
+    const int Wout = (Win - 1) * S - 2 * P + K;
+
+    if (dY.dimension(0) != B || dY.dimension(1) != Cout || dY.dimension(2) != Hout || dY.dimension(3) != Wout)
+        throw std::invalid_argument("Wrong transposed convolution gradient shape");
+
+    const int N = B * H * Win;
+    const int F = Cout * K * K;
+
+    DeconvRowMatrix Xmat = deconvInputToMatrix(X);
+    Eigen::MatrixXf Wmat = deconvWeightsToMatrix(layer);
+
+    // (N,F)
+    DeconvRowMatrix dP(N, F);
+    dP.setZero();
+
+    for (int b = 0; b < B; ++b)
+        for (int i = 0; i < H; ++i)
+            for (int j = 0; j < Win; ++j)
+            {
+                const int row = (b * H + i) * Win + j;
+
+                for (int o = 0; o < Cout; ++o)
+                    for (int u = 0; u < K; ++u)
+                        for (int v = 0; v < K; ++v)
+                        {
+                            const int h = i * S + u - P;
+                            const int w = j * S + v - P;
+
+                            if (h < 0 || h >= Hout || w < 0 || w >= Wout)
+                                continue;
+
+                            const int col = (o * K + u) * K + v;
+
+                            dP(row, col) = dY(b, o, h, w);
+                        }
+            }
+
+
+    Eigen::MatrixXf dWmat(Cin, F);
+    dWmat.noalias() = Xmat.transpose() * dP;
+    DeconvRowMatrix dXmat(N, Cin);
+    dXmat.noalias() = dP * Wmat.transpose();
+
+    ConvGradients G{
+        Tensor4D(Cout, Cin, K, K),
+        Eigen::VectorXf::Zero(Cout),
+        Tensor4D(B, Cin, H, Win)
+    };
 
     for (int o = 0; o < Cout; ++o)
         for (int c = 0; c < Cin; ++c)
             for (int u = 0; u < K; ++u)
                 for (int v = 0; v < K; ++v)
-                    W(o, c, u, v) *= scale;
+                {
+                    const int col = (o * K + u) * K + v;
+                    G.dW(o, c, u, v) = dWmat(c, col);
+                }
+
+    for (int b = 0; b < B; ++b)
+        for (int c = 0; c < Cin; ++c)
+            for (int i = 0; i < H; ++i)
+                for (int j = 0; j < Win; ++j)
+                {
+                    const int row = (b * H + i) * Win + j;
+                    G.dX(b, c, i, j) = dXmat(row, c);
+                }
+
+    for (int b = 0; b < B; ++b)
+        for (int o = 0; o < Cout; ++o)
+            for (int h = 0; h < Hout; ++h)
+                for (int w = 0; w < Wout; ++w)
+                    G.db(o) += dY(b, o, h, w);
+
+    return G;
 }
+
 
 
 static Eigen::MatrixXf im2col(const Tensor4D& X,int K, int S, int P)
@@ -103,11 +343,7 @@ Tensor4D convForward(const Tensor4D& X,const Conv2D& layer)
     const int S = layer.stride;
     const int P = layer.padding;
 
-    if (S <= 0 || P < 0 ||
-        layer.W.dimension(1) != Cin ||
-        layer.W.dimension(3) != K ||
-        layer.b.size() != Cout ||
-        H + 2 * P < K || Win + 2 * P < K)
+    if (S <= 0 || P < 0 || layer.W.dimension(1) != Cin || layer.W.dimension(3) != K || layer.b.size() != Cout || H + 2 * P < K || Win + 2 * P < K)
         throw std::invalid_argument("Invalid convolution dimensions");
 
     const int Hout = (H + 2 * P - K) / S + 1;

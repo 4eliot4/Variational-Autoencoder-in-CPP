@@ -8,14 +8,8 @@
 int H_size = 400;
 int D = 784;
 int B = 64;
-int channels_in = 1;
-int channels = 32; // number of filters
-int kernel = 4; // kernel size
-int stride = 2;
-int padding = 1; // number of padding per side 
-constexpr int LATENT_SIZE = 16;
-constexpr int FEATURE_SIZE = 64 * 7 * 7; // 3136
 
+constexpr float betaKL = 0.4f;
 
 double lr = 0.0003f;
 
@@ -23,16 +17,18 @@ auto xavier = [](int fan_in, int fan_out){ return std::sqrt(2.0f / float(fan_in 
 
 Weights::Weights() : W1(Eigen::MatrixXf::Random(D,H_size) * xavier(D, H_size)),
                      b1(Eigen::MatrixXf::Zero(1,H_size)),
-                     W2(Eigen::MatrixXf::Random(LATENT_SIZE, H_size) * xavier(LATENT_SIZE, H_size)),
-                     b2(Eigen::MatrixXf::Zero(1,H_size)),
+                     W2(Eigen::MatrixXf::Random(LATENT_SIZE, FEATURE_SIZE)* xavier(LATENT_SIZE, FEATURE_SIZE)),
+                     b2(Eigen::MatrixXf::Zero(1, FEATURE_SIZE)),
                      W3(Eigen::MatrixXf::Random(H_size,D) * xavier(H_size, D)),
                      b3(Eigen::MatrixXf::Zero(1,D)),
                      Wmu(Eigen::MatrixXf::Random(FEATURE_SIZE, LATENT_SIZE)* xavier(FEATURE_SIZE, LATENT_SIZE)),
                      bmu(Eigen::MatrixXf::Zero(1, LATENT_SIZE)),
                      Wv(Eigen::MatrixXf::Random(FEATURE_SIZE, LATENT_SIZE) * xavier(FEATURE_SIZE, LATENT_SIZE)),
                      bv(Eigen::MatrixXf::Zero(1, LATENT_SIZE)),
-                     conv1(channels_in, channels, kernel, stride, padding),
-                     conv2(channels, B, kernel, stride, padding)
+                     conv1(channels_in, channels_1,kernel, stride, padding),
+                     conv2(channels_1, channels_2,kernel, stride, padding),
+                     deconv1(channels_2, channels_1,kernel, stride, padding),
+                     deconv2(channels_1, channels_in,kernel, stride, padding)
                      {}
                      
 
@@ -86,22 +82,38 @@ void Weights::print()
     }
 }
 
-ForwardOutput::ForwardOutput() : X(B, H_size),
-                                 H(B, FEATURE_SIZE),
-                                 M(B, LATENT_SIZE),
-                                 V(B, LATENT_SIZE),
-                                 E(B, LATENT_SIZE),
-                                 Z(B, LATENT_SIZE),
-                                 A2(B,H_size),
-                                 H2(B,H_size),
-                                 Yhat(B, D),
-                                 sigmoid(B,D),
-                                 convInput(B, 1, 28, 28),
-                                 convA1(B, 32, 14, 14),
-                                 convH1(B, 32, 14, 14),
-                                 convA2(B, 64, 7, 7),
-                                 convH2(B, 64, 7, 7) 
-                                 {}
+
+ForwardOutput::ForwardOutput(): X(B, H_size),
+                                H(B, FEATURE_SIZE),
+                                M(B, LATENT_SIZE),
+                                V(B, LATENT_SIZE),
+                                E(B, LATENT_SIZE),
+                                Z(B, LATENT_SIZE),
+
+                                A2(B, FEATURE_SIZE),
+                                H2(B, FEATURE_SIZE),
+                                Yhat(B, INPUT_SIZE),
+                                sigmoid(B, INPUT_SIZE),
+
+                                // Encoder
+                                convInput(B, channels_in, IMAGE_SIZE, IMAGE_SIZE),
+
+                                convA1(B, channels_1, CONV1_SIZE, CONV1_SIZE),
+                                convH1(B, channels_1, CONV1_SIZE, CONV1_SIZE),
+
+                                convA2(B, channels_2, CONV2_SIZE, CONV2_SIZE),
+                                convH2(B, channels_2, CONV2_SIZE, CONV2_SIZE),
+
+                                // Decoder
+                                decInput(B, channels_2, CONV2_SIZE, CONV2_SIZE),
+
+                                decA1(B, channels_1, DECONV1_SIZE, DECONV1_SIZE),
+                                decH1(B, channels_1, DECONV1_SIZE, DECONV1_SIZE),
+
+                                decA2(B, channels_in, DECONV2_SIZE, DECONV2_SIZE)
+{
+}
+
 void ForwardOutput::lossPrint()
 {
     std::cout << "Total: " << loss
@@ -112,26 +124,33 @@ void ForwardOutput::lossPrint()
 
 Gradients::Gradients() : Gy(B, D), 
                          Gw3(H_size,D),
-                         Gh2(B,H_size),
-                         Ga2(B,H_size),
-                         Gm(B,H_size),
-                         Gv(B,H_size),
-                         Gwmu(H_size, H_size),   
-                         Gwv(H_size, H_size),    
-                         Gw2(H_size, H_size), 
-                         Gh(B, H_size),
+                         Gh2(B,FEATURE_SIZE),
+                         Ga2(B,FEATURE_SIZE),
+                         Gm(B,LATENT_SIZE),
+                         Gv(B,LATENT_SIZE),
+                         Gwmu(FEATURE_SIZE, LATENT_SIZE),
+                         Gwv(FEATURE_SIZE, LATENT_SIZE),  
+                         Gw2(LATENT_SIZE, FEATURE_SIZE), 
+                         Gh(B, FEATURE_SIZE),
                          Ga1(B,H_size), 
-                         Gz(B, H_size), 
+                         Gz(B, LATENT_SIZE), 
                          Gw1(D, H_size),
                          Gb3(1,D),
-                         Gb2(1, H_size), 
-                         Gbv(1,H_size),
-                         Gbmu(1,H_size),
+                         Gb2(1, FEATURE_SIZE), 
+                         Gbv(1, LATENT_SIZE),
+                         Gbmu(1, LATENT_SIZE),
                          Gb1(1, H_size),
-                         Gconv1W(32, 1, 4, 4),
-                         Gconv2W(64, 32, 4, 4),
-                         Gconv1b(Eigen::VectorXf::Zero(32)),
-                         Gconv2b(Eigen::VectorXf::Zero(64))
+                         // encoder
+                         Gconv1W(channels_1, channels_in, kernel, kernel),
+                         Gconv2W(channels_2, channels_1, kernel, kernel),
+                         Gconv1b(Eigen::VectorXf::Zero(channels_1)),
+                         Gconv2b(Eigen::VectorXf::Zero(channels_2)),
+
+                         // Decoder
+                         Gdeconv1W(channels_1, channels_2, kernel, kernel),
+                         Gdeconv2W(channels_in, channels_1, kernel, kernel),
+                         Gdeconv1b(Eigen::VectorXf::Zero(channels_1)),
+                         Gdeconv2b(Eigen::VectorXf::Zero(channels_in))
                          {}
 
 Eigen::MatrixXf Gy, Gw3,Gh2,Ga2,Gm,Gv,Gw2, Gh, Gz, Gw1;
@@ -147,7 +166,7 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
 
 
     // CNN encoeder
-    forward.convInput = matrixToTensor(X);
+    forward.convInput = matrixToTensor(X,channels_in,IMAGE_SIZE,IMAGE_SIZE);
 
     // First conv
     forward.convA1 = convForward(forward.convInput, weights.conv1);
@@ -179,16 +198,8 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
     }
     forward.Z = forward.M.array() + (0.5f * forward.V.array()).exp() * forward.E.array();
 
-    // DECODER
-    forward.A2 = forward.Z * weights.W2;
-    forward.A2.rowwise() += weights.b2.row(0);
-    forward.H2 = forward.A2.array().cwiseMax(0.0);
-    forward.Yhat = forward.H2 * weights.W3;
-    forward.Yhat.rowwise() += weights.b3.row(0);
-
-    forward.sigmoid = 1.0 / (1.0 + (-forward.Yhat.array()).exp()); // sigmoid element wise
-    //Eigen::MatrixXf loss_per_entry = -(X.array() * forward.sigmoid.array().log() // every element compute -xlog(...)
-                                  //   + (1 - X.array()) * (1 - forward.sigmoid.array()).log());
+    // convo decoder 
+    decoder(forward, weights);
     
     const float eps = 1e-7f; // small safety
     Eigen::ArrayXXf s = forward.sigmoid.array().min(1.0f - eps).max(eps);
@@ -196,21 +207,32 @@ void forwardPass(ForwardOutput& forward,const Weights& weights, const Eigen::Mat
     Eigen::MatrixXf loss_per_entry = -(X.array() * s.log() + (1.0f - X.array()) * (1.0f - s).log()).matrix();
     forward.lossRec = loss_per_entry.sum() / B;
     forward.lossKL = 0.5f / B * (forward.M.array().square() + forward.V.array().exp() - 1.0f- forward.V.array()).sum();
-    forward.loss = forward.lossRec + forward.lossKL;
+    forward.loss = forward.lossRec + betaKL * forward.lossKL;
 }
 
 /**
- * @brief Compute parameters from H only, used for interpolation for now
+ * @brief convolution decoder 
  */
-void decoder(ForwardOutput& forward,const Weights& weights)
+
+void decoder(ForwardOutput& forward, const Weights& weights)
 {
+
     forward.A2 = forward.Z * weights.W2;
     forward.A2.rowwise() += weights.b2.row(0);
-    forward.H2 = forward.A2.array().cwiseMax(0.0);
-    forward.Yhat = forward.H2 * weights.W3;
-    forward.Yhat.rowwise() += weights.b3.row(0);
-    forward.sigmoid = 1.0 / (1.0 + (-forward.Yhat.array()).exp()); // sigmoid element wise
+
+    forward.H2 = forward.A2.array().cwiseMax(0.0f);
+
+
+    forward.decInput = unflatten(forward.H2,channels_2,CONV2_SIZE,CONV2_SIZE);
+
+    forward.decA1 = convTransposeForward(forward.decInput,weights.deconv1);
+    forward.decH1 = reluForward(forward.decA1);
+    forward.decA2 = convTransposeForward(forward.decH1,weights.deconv2);
+    forward.Yhat = flatten(forward.decA2);
+
+    forward.sigmoid = 1.0f / (1.0f + (-forward.Yhat.array()).exp());
 }
+
 
 /**
  * @brief Computes all gradients for backpropagation
@@ -221,42 +243,45 @@ void decoder(ForwardOutput& forward,const Weights& weights)
  */
 void backPass(Gradients& gradients, const ForwardOutput& forward, const Weights& weights,const Eigen::MatrixXf& X)
 {
-    gradients.Gy = (forward.sigmoid - X) / B;
-    gradients.Gw3 = forward.H2.transpose() * gradients.Gy;
-    gradients.Gb3 = gradients.Gy.colwise().sum();
-    gradients.Gh2 = gradients.Gy * weights.W3.transpose();
-    //gradients.Ga2 = gradients.Gh2.array() * (1 - forward.H2.array() * forward.H2.array()); //for tanh
-    Eigen::MatrixXf relu2_mask = (forward.A2.array() > 0.0f).cast<float>(); // for ReLU
-    gradients.Ga2 = gradients.Gh2.array() * relu2_mask.array();
+    
+    
+    gradients.Gy = (forward.sigmoid - X) / B; // BCE gradient wrt output logits
+    Tensor4D dLogits = unflatten(gradients.Gy,channels_in,DECONV2_SIZE,DECONV2_SIZE);  // Convert gradient back into image dimensions
+    
+    ConvGradients GD2 = convTransposeBackward(forward.decH1,weights.deconv2,dLogits);// Backprop through second transposed convolution
+    Tensor4D dAdec1 = reluBackward(forward.decA1,GD2.dX);
+    ConvGradients GD1 = convTransposeBackward(forward.decInput,weights.deconv1,dAdec1);
+    gradients.Gh2 = flatten(GD1.dX);
 
+    
+    Eigen::MatrixXf mask =(forward.A2.array() > 0.0f).cast<float>();
+    gradients.Ga2 = (gradients.Gh2.array() * mask.array()).matrix(); // Backprop through dense ReLU
     gradients.Gw2 = forward.Z.transpose() * gradients.Ga2;
     gradients.Gb2 = gradients.Ga2.colwise().sum();
     gradients.Gz = gradients.Ga2 * weights.W2.transpose();
+    // Save decoder conv grad
+    gradients.Gdeconv1W = GD1.dW;
+    gradients.Gdeconv1b = GD1.db;
+
+    gradients.Gdeconv2W = GD2.dW;
+    gradients.Gdeconv2b = GD2.db;
 
 
     // VAEE, .array and * FOR ELEMENT WISE OPERATIONS
-    gradients.Gm = gradients.Gz + forward.M / B;
-    gradients.Gv = 0.5f * gradients.Gz.array() * (0.5f * forward.V.array()).exp() * forward.E.array() + (forward.V.array().exp() - 1.0f) / (2.0f * B);
+    gradients.Gm = gradients.Gz + betaKL * forward.M / B;
+    gradients.Gv = 0.5f * gradients.Gz.array() * (0.5f * forward.V.array()).exp() * forward.E.array() + betaKL * (forward.V.array().exp() - 1.0f) / (2.0f * B);
     gradients.Gwmu = forward.H.transpose() * gradients.Gm;
     gradients.Gbmu = gradients.Gm.colwise().sum();
     gradients.Gwv = forward.H.transpose() * gradients.Gv;
     gradients.Gbv = gradients.Gv.colwise().sum();
     gradients.Gh = gradients.Gm * weights.Wmu.transpose() + gradients.Gv * weights.Wv.transpose();
 
-    // Restore spatial dimensions:
-    Tensor4D dHconv2 = unflatten(gradients.Gh, 64, 7, 7);
-
-    // Backpropagate through the second ReLU
+    Tensor4D dHconv2 = unflatten(gradients.Gh, channels_2, CONV2_SIZE, CONV2_SIZE);
     Tensor4D dAconv2 = reluBackward(forward.convA2, dHconv2);
-
-    // Backpropagate through the second convolution
     ConvGradients G2 = convBackward(forward.convH1, weights.conv2, dAconv2);
     Tensor4D dAconv1 = reluBackward(forward.convA1, G2.dX);
-
-    // 5. Backpropagate through the first convolution
     ConvGradients G1 = convBackward(forward.convInput, weights.conv1, dAconv1);
 
-    // 6. Store trainable-parameter gradients
     gradients.Gconv2W = G2.dW;
     gradients.Gconv2b = G2.db;
 
@@ -350,9 +375,10 @@ void backPropAdam(Weights& weights, const Gradients& gradients, AdamState& opt)
     ensureMoments(opt.mWmu, opt.vWmu, weights.Wmu);
     ensureMoments(opt.mWv,  opt.vWv,  weights.Wv);
     ensureMoments(opt.mW2,  opt.vW2,  weights.W2);
-
+    ensureMoments(opt.mb2, opt.vb2, weights.b2);
     ensureMoments(opt.mbmu, opt.vbmu, weights.bmu);
     ensureMoments(opt.mbv,  opt.vbv,  weights.bv);
+
     // First conv
     adam_update_tensor(weights.conv1.W, gradients.Gconv1W,opt.conv1.mW, opt.conv1.vW,opt.t, float(lr));
     adam_update_vector(weights.conv1.b, gradients.Gconv1b,opt.conv1.mb, opt.conv1.vb,opt.t, float(lr));
@@ -366,14 +392,19 @@ void backPropAdam(Weights& weights, const Gradients& gradients, AdamState& opt)
     adam_update(weights.W2, gradients.Gw2, opt.mW2, opt.vW2, opt.t, (float)lr);
     adam_update(weights.b2, gradients.Gb2, opt.mb2, opt.vb2, opt.t, (float)lr);
 
-    adam_update(weights.W3, gradients.Gw3, opt.mW3, opt.vW3, opt.t, (float)lr);
-    adam_update(weights.b3, gradients.Gb3, opt.mb3, opt.vb3, opt.t, (float)lr);
+    
 
     adam_update(weights.Wmu, gradients.Gwmu,opt.mWmu, opt.vWmu, opt.t, (float)lr);
     adam_update(weights.bmu, gradients.Gbmu,opt.mbmu, opt.vbmu, opt.t, (float)lr);
 
     adam_update(weights.Wv, gradients.Gwv, opt.mWv, opt.vWv, opt.t, (float)lr);
     adam_update(weights.bv, gradients.Gbv, opt.mbv, opt.vbv, opt.t, (float)lr);
+
+    adam_update_tensor(weights.deconv1.W,gradients.Gdeconv1W,opt.deconv1.mW,opt.deconv1.vW,opt.t,float(lr));
+    adam_update_vector(weights.deconv1.b,gradients.Gdeconv1b,opt.deconv1.mb,opt.deconv1.vb,opt.t,float(lr));
+    adam_update_tensor(weights.deconv2.W,gradients.Gdeconv2W,opt.deconv2.mW,opt.deconv2.vW,opt.t,float(lr));
+    adam_update_vector(weights.deconv2.b,gradients.Gdeconv2b,opt.deconv2.mb,opt.deconv2.vb,opt.t,float(lr));
+
 }
 
 

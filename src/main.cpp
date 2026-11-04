@@ -12,7 +12,7 @@
 void generateOutput(std::__1::mt19937 &rng, ForwardOutput &forward, const Weights &weights, int iteration);
 void interpolation(Eigen::MatrixXf &X1, Eigen::MatrixXf &X2, const Weights &weights, ForwardOutput &forward, const double &t);
 void generateRandomDigits(ForwardOutput &forward, const Weights &weights, std::mt19937 &rng);
-size_t iterations = 7000;
+size_t iterations = 20000;
 
 int main()
 {
@@ -39,7 +39,7 @@ int main()
         {
             std::cout << "loss after :" << i << "iterations : "; forward.lossPrint();
         }
-        if(i % 1000 == 0)
+        if(i % 100 == 0)
         {
             generateOutput(rng, forward, weights, i);
             std::ostringstream hPath;
@@ -120,11 +120,11 @@ void generateRandomDigits( ForwardOutput& forward, const Weights& weights,std::m
     std::normal_distribution<float> normal(0.0f, 1.0f);
 
     // Generate B random latent vectors
-    forward.Z.resize(B, H_size);
+    forward.Z.resize(B, LATENT_SIZE);
 
     for (int i = 0; i < B; ++i)
     {
-        for (int j = 0; j < H_size; ++j)
+        for (int j = 0; j < LATENT_SIZE; ++j)
         {
             forward.Z(i,j) = normal(rng);
         }
