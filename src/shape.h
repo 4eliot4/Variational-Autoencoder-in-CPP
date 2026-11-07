@@ -1,10 +1,8 @@
 #include <Eigen/Dense>
 #include <random>
+#include <vector>
 
-Eigen::MatrixXf make_batch_mnist(int batch_size,
-                                 std::mt19937 &rng,
-                                 bool use_train);
-
+Eigen::MatrixXf make_batch_mnist(int batch_size,std::mt19937& rng,bool use_train,std::vector<int>* sampledIndices = nullptr);
 bool write_png_grid_mnist(const Eigen::MatrixXf &batch,
                           int gridCols,
                           int gridRows,

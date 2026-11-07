@@ -5,7 +5,10 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
-
+#include <fstream>
+#include <vector>
+#include <cstdint>
+#include <stdexcept>
 #include "shape.h"
 #include "network.h"
 
@@ -13,7 +16,9 @@ void generateOutput(std::__1::mt19937 &rng, ForwardOutput &forward, const Weight
 void interpolation(Eigen::MatrixXf &X1, Eigen::MatrixXf &X2, const Weights &weights, ForwardOutput &forward, const double &t);
 void generateRandomDigits(ForwardOutput &forward, const Weights &weights, std::mt19937 &rng);
 void generateFromPosterior(ForwardOutput &forward, const Weights &weights, std::mt19937 &rng);
-size_t iterations = 5000;
+void generateFromCentroids(ForwardOutput &forward, const Weights &weights, std::mt19937 &rng);
+std::vector<unsigned char> loadMnistLabels(const std::string &path);
+size_t iterations = 3000;
 
 int main()
 {
@@ -50,10 +55,50 @@ int main()
             //save_matrix_images_csv(forward.H, hPath.str());
         }
     }
-    Eigen::MatrixXf X1 = make_batch_mnist(B, rng, true);
-    Eigen::MatrixXf X2 = make_batch_mnist(B, rng, true);
-    double t = 0.5;
-    //interpolation(X1, X2, weights, forward, t);
+
+    // export for PCA Plotting
+    auto labels = loadMnistLabels("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/MNIST/train-labels.idx1-ubyte");
+
+    std::ofstream latentFile("latent_means.csv");
+    std::ofstream labelFile("latent_labels.csv");
+
+    if (!latentFile || !labelFile)
+        throw std::runtime_error("Cannot create CSV files");
+
+    // Export 160 batches = 10,240 images
+    for (int batch = 0; batch < 160; ++batch)
+    {
+        std::vector<int> indices;
+
+        Eigen::MatrixXf X = make_batch_mnist(
+            B, rng, true, &indices
+        );
+
+        X = (X.array() > 0.5f).cast<float>();
+
+        forwardPass(forward, weights, X, rng);
+
+        for (int i = 0; i < forward.M.rows(); ++i)
+        {
+            
+            for (int j = 0; j < LATENT_SIZE; ++j)
+            {
+                latentFile << forward.M(i, j);
+
+                if (j + 1 < LATENT_SIZE)
+                    latentFile << ",";// Save the 32 latent means
+            }
+
+            latentFile << "\n";
+
+            
+            labelFile << int(labels.at(indices.at(i))) << "\n"; /// Save the matching MNIST label
+        }
+    }
+
+    std::cout << "Latent CSV files saved\n";
+    generateFromCentroids(forward, weights, rng);
+
 
     generateFromPosterior(forward, weights, rng);
     generateRandomDigits(forward, weights, rng);
@@ -154,4 +199,82 @@ void generateFromPosterior(ForwardOutput& forward,const Weights& weights,std::mt
     forwardPass(forward, weights, X, rng);
 
     write_png_grid_mnist(forward.sigmoid, 8, 8,"generated_from_posterior.png");
+}
+
+
+std::vector<unsigned char> loadMnistLabels(const std::string& path)
+{
+    std::ifstream file(path, std::ios::binary);
+
+    if (!file)
+        throw std::runtime_error("Cannot open MNIST labels");
+
+    auto read32 = [&file]() -> uint32_t
+    {
+        unsigned char b[4];
+
+        if (!file.read(reinterpret_cast<char*>(b), 4))
+            throw std::runtime_error("Invalid label header");
+
+        return (uint32_t(b[0]) << 24)
+             | (uint32_t(b[1]) << 16)
+             | (uint32_t(b[2]) << 8)
+             | uint32_t(b[3]);
+    };
+
+    uint32_t magic = read32();
+    uint32_t count = read32();
+
+    if (magic != 2049)
+        throw std::runtime_error("Invalid MNIST label magic");
+
+    std::vector<unsigned char> labels(count);
+
+    if (!file.read(
+        reinterpret_cast<char*>(labels.data()),
+        count))
+        throw std::runtime_error("Incomplete MNIST labels");
+
+    return labels;
+}
+
+
+
+void generateFromCentroids(ForwardOutput& forward,const Weights& weights,std::mt19937& rng)
+{
+    std::ifstream file("digit_centroids.txt");
+
+    if (!file)
+        throw std::runtime_error("Cannot open centroids");
+
+    Eigen::MatrixXf centroids(10, LATENT_SIZE);
+
+    for (int k = 0; k < 10; ++k)
+        for (int j = 0; j < LATENT_SIZE; ++j)
+            if (!(file >> centroids(k, j)))
+                throw std::runtime_error("Invalid centroids file");
+
+    forward.Z.resize(B, LATENT_SIZE);
+
+    std::normal_distribution<float> normal(0.0f, 1.0f);
+
+    const float variation = 0.3f;
+
+    for (int i = 0; i < B; ++i)
+    {
+        int digit = i % 10;
+
+        for (int j = 0; j < LATENT_SIZE; ++j)
+        {
+            forward.Z(i, j) = centroids(digit, j) + variation * normal(rng);
+        }
+    }
+
+    decoder(forward, weights);
+
+    write_png_grid_mnist(
+        forward.sigmoid,
+        8, 8,
+        "generated_centroids.png"
+    );
 }

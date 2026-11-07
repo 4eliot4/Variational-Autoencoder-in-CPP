@@ -86,24 +86,38 @@ static void load_mnist()
 // ------------------------------------------------------------
 // Public: sample a batch of MNIST images
 // ------------------------------------------------------------
-Eigen::MatrixXf make_batch_mnist(int batch_size,
-                                 std::mt19937 &rng,
-                                 bool use_train)
+
+Eigen::MatrixXf make_batch_mnist(int batch_size,std::mt19937& rng,bool use_train,std::vector<int>* sampledIndices)
 {
     load_mnist();
 
-    const Eigen::MatrixXf &Xsrc = use_train ? g_train_images : g_test_images;
+    const Eigen::MatrixXf& Xsrc =
+        use_train ? g_train_images : g_test_images;
 
     std::uniform_int_distribution<int> U(0, Xsrc.rows() - 1);
 
-    Eigen::MatrixXf X(batch_size, 28*28);
+    Eigen::MatrixXf X(batch_size, 28 * 28);
 
-    for (int i = 0; i < batch_size; ++i) {
-        int idx = U(rng);
-        X.row(i) = Xsrc.row(idx);
+    if (sampledIndices != nullptr)
+    {
+        sampledIndices->clear();
+        sampledIndices->reserve(batch_size);
     }
+
+    for (int i = 0; i < batch_size; ++i)
+    {
+        int idx = U(rng);
+
+        X.row(i) = Xsrc.row(idx);
+
+        if (sampledIndices != nullptr)
+            sampledIndices->push_back(idx);
+    }
+
     return X;
 }
+
+
 
 
 // ------------------------------------------------------------

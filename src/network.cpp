@@ -9,7 +9,7 @@ int H_size = 400;
 int D = 784;
 int B = 64;
 
-constexpr float betaKL = 0.9f;
+constexpr float betaKL = 1.3f;
 
 double lr = 0.0003f;
 
