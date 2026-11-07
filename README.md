@@ -2,7 +2,7 @@
 
 ![3D UMAP projection of the CNN-VAE's learned MNIST latent representations, colored by digit label](images/latent_umap_3d.png)
 
-*The 32-dimensional latent representations learned by my CNN-VAE, projected into 3D with **unsupervised UMAP**. Each point is an encoded MNIST image. Digit labels were used **only after projection**, to color the points—not to train the VAE or create the UMAP embedding.*
+*The 32-dimensional latent representations learned by my CNN-VAE, projected into 3D with **unsupervised UMAP**. Each point is an encoded MNIST image. Digit labels were used **only after projection**, to color the points-not to train the VAE or create the UMAP embedding.*
 
 I started this project to understand **generative models from the underlying mathematics**, rather than relying on a machine-learning framework. What began as a fully connected autoencoder became a variational autoencoder (VAE), then a convolutional VAE with **convolutions, transposed convolutions, gradients, and Adam implemented in C++ using Eigen**.
 
@@ -14,7 +14,7 @@ The most interesting result so far isn't just reconstructing handwritten digits:
 
 ### Generation from class centroids
 
-| Class centroids — no variation (`α = 0`) | Local variations (`α = 0.1`) |
+| Class centroids - no variation (`α = 0`) | Local variations (`α = 0.1`) |
 | :---: | :---: |
 | ![Digits decoded from the ten class centroids, repeated in sequence](images/generated_centroids_no_variations.png) | ![Digit variations produced by perturbing class centroids in latent space](images/generated_centroids_Variation0.1.png) |
 
@@ -44,7 +44,7 @@ These are **post-hoc, label-guided latent samples**, *not* unconditional generat
 
 ## 1. How the project evolved
 
-I built the model in stages so I could understand—and debug—every mathematical component before moving to a more expressive architecture.
+I built the model in stages so I could understand and debug every mathematical component before moving to a more expressive architecture.
 
 1. **Dense autoencoder:** learn an encoder and decoder using reconstruction loss.
 2. **Dense VAE:** introduce Gaussian latent variables, the reparameterization trick, KL regularization, and the full backward pass.
@@ -259,7 +259,7 @@ Finally, `G_H` is unflattened into `(B,64,7,7)` and propagated backwards through
 
 ---
 
-## 4. Convolution from scratch—and why I switched to `im2col`
+## 4. Convolution from scratch and why I switched to `im2col`
 
 ### First implementation: explicit loops
 
@@ -533,7 +533,7 @@ To create different renderings from the same region, I perturb the centroid:
 - **`α = 0`**: one deterministic prototype per digit; repetitions are identical.
 - **`α = 0.1`**: small random perturbations around the prototype, producing related but visibly different handwritten digits.
 
-| `α = 0` — centroid decoding | `α = 0.1` — local generation |
+| `α = 0` - centroid decoding | `α = 0.1` - local generation |
 | :---: | :---: |
 | ![Original centroid generation grid without noise](images/generated_centroids_no_variations.png) | ![Centroid generation grid with Gaussian latent perturbations](images/generated_centroids_Variation0.1.png) |
 
@@ -594,4 +594,4 @@ The three figures at the top of this README correspond to those last two analysi
 
 **C++ · Eigen · MNIST · Manual differentiation · Adam · `im2col` · Transposed convolutions · Python/UMAP/Plotly for visualization**
 
-This is primarily a project in understanding. I wanted to see the full path from a pixel, through convolutional filters, Gaussian sampling and an optimizer update, all the way to a meaningful latent representation—and understand precisely why things fail when a detail in that path is wrong.
+This is primarily a project in understanding. I wanted to see the full path from a pixel, through convolutional filters, Gaussian sampling and an optimizer update, all the way to a meaningful latent representation and understand precisely why things fail when a detail in that path is wrong.
