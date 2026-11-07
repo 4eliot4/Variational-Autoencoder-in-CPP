@@ -12,7 +12,8 @@
 void generateOutput(std::__1::mt19937 &rng, ForwardOutput &forward, const Weights &weights, int iteration);
 void interpolation(Eigen::MatrixXf &X1, Eigen::MatrixXf &X2, const Weights &weights, ForwardOutput &forward, const double &t);
 void generateRandomDigits(ForwardOutput &forward, const Weights &weights, std::mt19937 &rng);
-size_t iterations = 20000;
+void generateFromPosterior(ForwardOutput &forward, const Weights &weights, std::mt19937 &rng);
+size_t iterations = 5000;
 
 int main()
 {
@@ -39,7 +40,7 @@ int main()
         {
             std::cout << "loss after :" << i << "iterations : "; forward.lossPrint();
         }
-        if(i % 100 == 0)
+        if(i % 500 == 0)
         {
             generateOutput(rng, forward, weights, i);
             std::ostringstream hPath;
@@ -53,6 +54,8 @@ int main()
     Eigen::MatrixXf X2 = make_batch_mnist(B, rng, true);
     double t = 0.5;
     //interpolation(X1, X2, weights, forward, t);
+
+    generateFromPosterior(forward, weights, rng);
     generateRandomDigits(forward, weights, rng);
     return 0;
 }
@@ -115,37 +118,40 @@ void interpolation(Eigen::MatrixXf& X1,Eigen::MatrixXf& X2,const Weights& weight
 }
 */
 
-void generateRandomDigits( ForwardOutput& forward, const Weights& weights,std::mt19937& rng)
+
+void generateRandomDigits(ForwardOutput& forward,const Weights& weights,std::mt19937& rng)
 {
     std::normal_distribution<float> normal(0.0f, 1.0f);
 
-    // Generate B random latent vectors
     forward.Z.resize(B, LATENT_SIZE);
 
     for (int i = 0; i < B; ++i)
     {
         for (int j = 0; j < LATENT_SIZE; ++j)
         {
-            forward.Z(i,j) = normal(rng);
+            forward.Z(i, j) = normal(rng);
         }
     }
 
-    // Decode the random latent vectors
-    decoder(forward, weights);
+    
+    decoder(forward, weights); // Generate images  from latent vectors
 
-    // Save generated images
-    write_png_grid_mnist(
-        forward.sigmoid,
-        8,
-        8,
-        "generated_digits.png"
-    );
-    Eigen::MatrixXf binary =
-    (forward.sigmoid.array() > 0.5f).cast<float>();
+    // Save predicted pixel probabilities
+    write_png_grid_mnist(forward.sigmoid, 8, 8, "generated_digits.png");
+    Eigen::MatrixXf binary = (forward.sigmoid.array() > 0.5f).cast<float>();
 
-    write_png_grid_mnist(
-        binary,
-        8, 8,
-        "generated_binary.png"
-    );
+    write_png_grid_mnist(binary, 8, 8, "generated_binary.png");
+}
+
+
+void generateFromPosterior(ForwardOutput& forward,const Weights& weights,std::mt19937& rng)
+{
+
+    Eigen::MatrixXf X = make_batch_mnist(B, rng, true);
+    X = (X.array() > 0.5f).cast<float>();
+
+
+    forwardPass(forward, weights, X, rng);
+
+    write_png_grid_mnist(forward.sigmoid, 8, 8,"generated_from_posterior.png");
 }
