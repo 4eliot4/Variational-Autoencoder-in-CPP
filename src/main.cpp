@@ -35,7 +35,6 @@ int main()
         X = make_batch_mnist(B, rng, true);
         // X = make_single_image_batch(1234, B); // overfit test
         //X = make_two_images_batch(1234, 1235, B);
-        X = (X.array() > 0.5f).cast<float>();
         forwardPass(forward, weights, X,rng);
         backPass(gradients, forward, weights, X);
         //backProp(weights,gradients);
@@ -65,14 +64,12 @@ int main()
     if (!latentFile || !labelFile)
         throw std::runtime_error("Cannot create CSV files");
 
-    // Export 160 batches = 10,240 images
+
     for (int batch = 0; batch < 160; ++batch)
     {
         std::vector<int> indices;
 
-        Eigen::MatrixXf X = make_batch_mnist(
-            B, rng, true, &indices
-        );
+        Eigen::MatrixXf X = make_batch_mnist(B, rng, false, &indices);
 
         X = (X.array() > 0.5f).cast<float>();
 
@@ -110,10 +107,9 @@ void generateOutput(std::mt19937 &rng, ForwardOutput& forward, const Weights& we
 {
     // Load an image
     std::mt19937 rng1(1020u);
-    Eigen::MatrixXf X_test = make_batch_mnist(B, rng1, true);
+    Eigen::MatrixXf X_test = make_batch_mnist(B, rng1, false);
     //Eigen::MatrixXf X_test = make_single_image_batch(1234, B);
     //Eigen::MatrixXf X_test = make_two_images_batch(1234, 1235, B);
-    X_test = (X_test.array() > 0.5f).cast<float>();
     std::ostringstream inputPath;
     inputPath << "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/assets/"<< "INPUT_After_" << std::setw(5) << std::setfill('0') << iteration << ".png";
 

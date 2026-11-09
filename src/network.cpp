@@ -6,7 +6,7 @@
 
 // ====== SETTINGS ======
 int H_size = 400;
-int D = 784;
+int D = INPUT_SIZE;
 int B = 64;
 
 constexpr float betaKL = 1.3f;

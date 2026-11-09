@@ -13,7 +13,7 @@ extern double lr;
 
 
 
-inline constexpr int IMAGE_SIZE = 28;
+inline constexpr int IMAGE_SIZE = 64;
 
 inline constexpr int channels_in = 1;
 inline constexpr int channels_1 = 32;

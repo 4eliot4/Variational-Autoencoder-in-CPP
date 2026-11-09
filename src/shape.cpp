@@ -1,9 +1,13 @@
 #include "shape.h"
+#include "network.h"
+
 #include <fstream>
 #include <vector>
 #include <iostream>
 #include <cassert>
 #include <cmath>
+#include <algorithm>
+#include <stdexcept>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/third_party/stb/stb_image_write.h"
@@ -33,51 +37,69 @@ static uint32_t read_uint32(std::ifstream &f)
 // ------------------------------------------------------------
 // Load MNIST IDX3 image file
 // ------------------------------------------------------------
-static Eigen::MatrixXf load_idx3_images(const std::string &path)
+
+static Eigen::MatrixXf load_idx3_images(const std::string& path)
 {
     std::ifstream f(path, std::ios::binary);
-    if (!f) {
-        std::cerr << "ERROR: cannot open MNIST file: " << path << "\n";
-        exit(1);
-    }
 
-    uint32_t magic   = read_uint32(f);
-    uint32_t n_images= read_uint32(f);
-    uint32_t n_rows  = read_uint32(f);
-    uint32_t n_cols  = read_uint32(f);
+    if (!f)
+        throw std::runtime_error(
+            "Cannot open image file: " + path
+        );
 
-    assert(magic == 2051); // Magic number for MNIST images
-    assert(n_rows == 28 && n_cols == 28);
+    uint32_t magic = read_uint32(f);
+    uint32_t n_images = read_uint32(f);
+    uint32_t n_rows = read_uint32(f);
+    uint32_t n_cols = read_uint32(f);
 
-    Eigen::MatrixXf X(n_images, 28*28);
+    if (magic != 2051)
+        throw std::runtime_error("Invalid IDX image format");
 
-    std::vector<unsigned char> buffer(28*28);
+    if (n_rows != IMAGE_SIZE || n_cols != IMAGE_SIZE)
+        throw std::runtime_error(
+            "Dataset resolution does not match IMAGE_SIZE"
+        );
 
-    for (uint32_t i = 0; i < n_images; ++i) {
-        f.read((char*)buffer.data(), 28*28);
-        for (int j = 0; j < 28*28; ++j) {
-            X(i, j) = float(buffer[j]) / 255.0f; // normalize
+    Eigen::MatrixXf X(n_images, INPUT_SIZE);
+    std::vector<unsigned char> buffer(INPUT_SIZE);
+
+    for (uint32_t i = 0; i < n_images; ++i)
+    {
+        if (!f.read(
+            reinterpret_cast<char*>(buffer.data()),
+            static_cast<std::streamsize>(buffer.size())))
+        {
+            throw std::runtime_error(
+                "Incomplete image data: " + path
+            );
+        }
+
+        for (int j = 0; j < INPUT_SIZE; ++j)
+        {
+            X(i, j) = float(buffer[j]) / 255.0f;
         }
     }
+
     return X;
 }
+
 
 
 // ------------------------------------------------------------
 // Load MNIST dataset once
 // ------------------------------------------------------------
-static void load_mnist()
+static void load_dataset()
 {
     if (g_loaded) return;
 
-    std::cout << "Loading MNIST...\n";
+    std::cout << "Loading Dataset...\n";
 
-    g_train_images = load_idx3_images("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/MNIST/train-images.idx3-ubyte");
-    g_test_images  = load_idx3_images("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/MNIST/t10k-images.idx3-ubyte");
+    g_train_images = load_idx3_images("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/data/quickdraw64/train-images.idx3-ubyte");
+    g_test_images = load_idx3_images("/Users/daboi/Documents/Projects/VAE/Intelligent_Data_Compression_Framework/data/quickdraw64/test-images.idx3-ubyte");
 
     g_loaded = true;
 
-    std::cout << "MNIST loaded: "
+    std::cout << "Dataset loaded: "
               << g_train_images.rows() << " train, "
               << g_test_images.rows() << " test images.\n";
 }
@@ -89,14 +111,14 @@ static void load_mnist()
 
 Eigen::MatrixXf make_batch_mnist(int batch_size,std::mt19937& rng,bool use_train,std::vector<int>* sampledIndices)
 {
-    load_mnist();
+    load_dataset();
 
     const Eigen::MatrixXf& Xsrc =
         use_train ? g_train_images : g_test_images;
 
     std::uniform_int_distribution<int> U(0, Xsrc.rows() - 1);
 
-    Eigen::MatrixXf X(batch_size, 28 * 28);
+    Eigen::MatrixXf X(batch_size, INPUT_SIZE);
 
     if (sampledIndices != nullptr)
     {
@@ -129,7 +151,11 @@ bool write_png_grid_mnist(const Eigen::MatrixXf &batch,
                           const std::string &outPath)
 {
     const int B = batch.rows();
-    const int W = 28, H = 28;
+    const int W = IMAGE_SIZE;
+    const int H = IMAGE_SIZE;
+
+    if (batch.cols() != INPUT_SIZE)
+        throw std::invalid_argument("PNG grid: incorrect image dimensions");
 
     const int outW = gridCols * W;
     const int outH = gridRows * H;
@@ -169,7 +195,7 @@ bool write_png_grid_mnist(const Eigen::MatrixXf &batch,
 Eigen::MatrixXf make_single_image_batch(int index, int batch_size)
 {
     // Make sure MNIST is loaded
-    load_mnist();
+    load_dataset();
 
     const Eigen::MatrixXf& Xsrc = g_train_images;  // this is your "mnist_train"
     assert(index >= 0 && index < Xsrc.rows()); // only in debug version of make
@@ -188,7 +214,7 @@ Eigen::MatrixXf make_single_image_batch(int index, int batch_size)
 // ------------------------------------------------------------
 Eigen::MatrixXf make_two_images_batch(int index1, int index2,int batch_size)
 {
-    load_mnist();
+    load_dataset();
 
     const Eigen::MatrixXf& Xsrc = g_train_images;
     assert(index1 >= 0 && index1 < Xsrc.rows()); // only in debug version of make
